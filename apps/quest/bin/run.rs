@@ -10,7 +10,7 @@ use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentAudience, AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmEndpointConfig,
+    AgentGoal, AgentOptions, AgentRole, AutoLlmCredentialResolver, LlmEndpointConfig,
     QuestMcpServer, QuestXrAgent,
 };
 use questforge_ops::{
@@ -289,7 +289,7 @@ impl From<CliAgentGoal> for AgentGoal {
 }
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
-enum CliAgentAudience {
+enum CliAgentRole {
     Studio,
     Enterprise,
     Platform,
@@ -298,14 +298,14 @@ enum CliAgentAudience {
     Developer,
 }
 
-impl From<CliAgentAudience> for AgentAudience {
-    fn from(value: CliAgentAudience) -> Self {
+impl From<CliAgentRole> for AgentRole {
+    fn from(value: CliAgentRole) -> Self {
         match value {
-            CliAgentAudience::Studio => Self::Studio,
-            CliAgentAudience::Enterprise => Self::Enterprise,
-            CliAgentAudience::Platform => Self::Platform,
-            CliAgentAudience::Qa => Self::Qa,
-            CliAgentAudience::Developer => Self::Developer,
+            CliAgentRole::Studio => Self::Studio,
+            CliAgentRole::Enterprise => Self::Enterprise,
+            CliAgentRole::Platform => Self::Platform,
+            CliAgentRole::Qa => Self::Qa,
+            CliAgentRole::Developer => Self::Developer,
         }
     }
 }
@@ -321,12 +321,12 @@ struct AgentArgs {
     /// Release version string
     #[arg(long, default_value = "1.0.0")]
     release_version: String,
-    /// Autonomous goal to execute (defaults to audience default or `release`)
+    /// Autonomous goal to execute (defaults to role default or `release`)
     #[arg(long, value_enum)]
     goal: Option<CliAgentGoal>,
-    /// Target audience profile (`studio`, `enterprise`, `platform`, `qa`, `developer`)
-    #[arg(long, value_enum, default_value_t = CliAgentAudience::Developer)]
-    audience: CliAgentAudience,
+    /// Agent role profile (`studio`, `enterprise`, `platform`, `qa`, `developer`)
+    #[arg(long, alias = "audience", value_enum, default_value_t = CliAgentRole::Developer)]
+    role: CliAgentRole,
     /// Optional natural-language prompt to run in LLM ReAct mode via `quest mcp`
     #[arg(long)]
     prompt: Option<String>,
@@ -990,7 +990,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             None
         };
 
-        let audience: AgentAudience = args.audience.into();
+        let role: AgentRole = args.role.into();
         let resolved = if explicit_key.is_some() {
             None
         } else if let Some(p) = explicit_provider {
@@ -1093,14 +1093,14 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             api_key,
             auth_source,
         };
-        let mut llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_audience(
+        let mut llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_role(
             &quest_bin,
             &args.project_dir,
             &prompt,
             args.max_turns,
             provider,
             &endpoint_cfg,
-            audience,
+            role,
         );
         if let Err(ref err) = llm_res {
             if args.auth && AutoLlmCredentialResolver::is_auth_error(err) {
@@ -1113,14 +1113,14 @@ fn run_agent(args: AgentArgs) -> ExitCode {
                         AutoLlmCredentialResolver::config_with_api_key(provider.provider_id(), key);
                     fallback_cfg.endpoint_url = endpoint_cfg.endpoint_url.clone();
                     fallback_cfg.default_model = endpoint_cfg.default_model.clone();
-                    llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_audience(
+                    llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_role(
                         &quest_bin,
                         &args.project_dir,
                         &prompt,
                         args.max_turns,
                         provider,
                         &fallback_cfg,
-                        audience,
+                        role,
                     );
                 }
             }
@@ -1154,11 +1154,11 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         };
     }
 
-    let audience: AgentAudience = args.audience.into();
+    let role: AgentRole = args.role.into();
     let goal = args
         .goal
         .map(Into::into)
-        .unwrap_or_else(|| audience.default_goal());
+        .unwrap_or_else(|| role.default_goal());
     let opts = AgentOptions {
         project_dir: args.project_dir,
         output_dir: args.output_dir,

@@ -16,6 +16,6 @@ pub use self::mcp_server::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpToolDefinition, QuestMcpServer,
 };
 pub use self::xr_agent::{
-    AgentAudience, AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, LlmAgentOptions,
+    AgentGoal, AgentOptions, AgentRole, AgentRunReport, AgentStepLog, LlmAgentOptions,
     LlmRunReport, QuestXrAgent,
 };

@@ -61,7 +61,7 @@ flowchart LR
 
 ## AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)
 
-Every autonomous and LLM-driven agent interaction routes strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`), with provider credentials and wire formats abstracted behind `LlmProviderSpi` (`GeminiProvider`, `OpenAiProvider`, `AnthropicProvider`) and tailored via `--audience` (`studio`, `enterprise`, `platform`, `qa`, `developer`):
+Every autonomous and LLM-driven agent interaction routes strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`), with provider credentials and wire formats abstracted behind `LlmProviderSpi` (`GeminiProvider`, `OpenAiProvider`, `AnthropicProvider`) and tailored via `--role` (`studio`, `enterprise`, `platform`, `qa`, `developer`):
 
 ```mermaid
 sequenceDiagram
@@ -70,9 +70,9 @@ sequenceDiagram
     participant MCP as quest mcp (JSON-RPC 2.0 Server)
     participant LLM as LlmProviderSpi (Gemini / OpenAI / Anthropic)
 
-    User->>Agent: quest agent --audience studio --provider gemini --auth --prompt "Check, fix, build, and verify orbit-pulse-vr"
+    User->>Agent: quest agent --role studio --provider gemini --auth --prompt "Check, fix, build, and verify orbit-pulse-vr"
     Agent->>MCP: tools/list (JSON-RPC 2.0)
-    MCP-->>Agent: 12 QuestForge MCP tool schemas (filtered by audience)
+    MCP-->>Agent: 14 QuestForge MCP tool schemas (filtered by role)
     loop Until LLM returns final answer
         Agent->>LLM: Provider-native request (OpenAI/Gemini Chat Completions or Anthropic /v1/messages)
         LLM-->>Agent: tool_calls / tool_use (e.g. check_source, sync_project, build_project, verify_release)

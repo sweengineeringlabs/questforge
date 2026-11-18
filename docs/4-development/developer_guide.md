@@ -46,9 +46,9 @@ Authenticate or inspect OAuth/API-key status across `gemini`, `openai`, and `ant
 quest auth --status
 quest auth --provider gemini
 ```
-Run an audience-tailored XR DevOps agent (`studio`, `enterprise`, `platform`, `qa`, `developer`):
+Run a role-based XR DevOps agent (`studio`, `enterprise`, `platform`, `qa`, `developer`):
 ```pwsh
-quest agent --audience qa --provider gemini --auth --prompt "Verify release readiness and discover connected headsets"
+quest agent --role qa --provider gemini --auth --prompt "Verify release readiness and discover connected headsets"
 ```
 If OAuth is unavailable or rejected (`401`/`403`), `quest auth` and `quest agent --auth` fall back to environment API keys or an interactive API-key prompt.
 

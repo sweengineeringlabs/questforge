@@ -31,7 +31,7 @@ Building for **Meta Quest** shouldn't mean wrestling with OpenXR permissions, br
 
 ```pwsh
 quest auth --provider gemini
-quest agent --audience studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
+quest agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
 ```
 
 ---

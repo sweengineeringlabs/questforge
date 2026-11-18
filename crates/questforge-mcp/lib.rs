@@ -29,8 +29,8 @@ pub use self::error::McpError;
 pub use self::spi::{AnthropicProvider, AutoLlmCredentialResolver, GeminiProvider, OpenAiProvider};
 pub use self::traits::LlmProviderSpi;
 pub use self::vo::{
-    AgentAudience, AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, JsonRpcError,
-    JsonRpcRequest, JsonRpcResponse, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig,
-    LlmHttpRequest, LlmRunReport, LlmToolInvocation, LlmToolSchema, LlmTurnResponse,
-    McpToolDefinition, QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AgentRole, AgentRunReport, AgentStepLog, JsonRpcError, JsonRpcRequest,
+    JsonRpcResponse, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig, LlmHttpRequest,
+    LlmRunReport, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpToolDefinition,
+    QuestMcpServer, QuestXrAgent,
 };

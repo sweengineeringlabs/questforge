@@ -5,7 +5,7 @@ use std::fs;
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentAudience, AgentGoal, AgentOptions, AnthropicProvider, AutoLlmCredentialResolver,
+    AgentGoal, AgentOptions, AgentRole, AnthropicProvider, AutoLlmCredentialResolver,
     GeminiProvider, JsonRpcRequest, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig,
     LlmHttpRequest, LlmProviderSpi, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError,
     OpenAiProvider, QuestMcpServer, QuestXrAgent,
@@ -508,24 +508,23 @@ fn test_live_all_three_providers_real_oauth_e2e() {
 }
 
 #[test]
-fn test_agent_audience_profiles_and_tool_filtering_happy() {
-    assert_eq!(AgentAudience::Studio.default_goal(), AgentGoal::Release);
+fn test_agent_role_profiles_and_tool_filtering_happy() {
+    assert_eq!(AgentRole::Studio.default_goal(), AgentGoal::Release);
     assert_eq!(
-        AgentAudience::Enterprise.default_goal(),
+        AgentRole::Enterprise.default_goal(),
         AgentGoal::FleetRelease
     );
-    assert_eq!(AgentAudience::Platform.default_goal(), AgentGoal::Check);
-    assert_eq!(AgentAudience::Qa.default_goal(), AgentGoal::FleetRelease);
-    assert_eq!(AgentAudience::Developer.default_goal(), AgentGoal::Check);
-    assert!(AgentAudience::Developer.preferred_tools().is_empty());
-    assert!(AgentAudience::Qa
-        .preferred_tools()
-        .contains(&"fleet_discover"));
+    assert_eq!(AgentRole::Platform.default_goal(), AgentGoal::Check);
+    assert_eq!(AgentRole::Qa.default_goal(), AgentGoal::FleetRelease);
+    assert_eq!(AgentRole::Developer.default_goal(), AgentGoal::Check);
+    assert!(AgentRole::Developer.preferred_tools().is_empty());
+    assert!(AgentRole::Qa.preferred_tools().contains(&"ovr_store"));
+    assert!(AgentRole::Qa.preferred_tools().contains(&"build_project"));
 
     let Ok(dir) = TempDir::new() else {
         panic!("temp dir");
     };
-    let Ok(report) = QuestXrAgent::run_llm_in_process_with_audience(
+    let Ok(report) = QuestXrAgent::run_llm_in_process_with_role(
         &LlmAgentOptions {
             project_dir: dir.path().to_path_buf(),
             prompt: "Verify QA readiness".to_string(),
@@ -535,7 +534,7 @@ fn test_agent_audience_profiles_and_tool_filtering_happy() {
             max_turns: 2,
         },
         &OpenAiProvider,
-        AgentAudience::Qa,
+        AgentRole::Qa,
         |req| {
             let sys = req["messages"][0]["content"].as_str().unwrap_or("");
             assert!(sys.contains("QA & Release Manager"));
@@ -547,22 +546,22 @@ fn test_agent_audience_profiles_and_tool_filtering_happy() {
                         .collect()
                 })
                 .unwrap_or_default();
-            assert_eq!(tool_names.len(), AgentAudience::Qa.preferred_tools().len());
+            assert_eq!(tool_names.len(), AgentRole::Qa.preferred_tools().len());
             assert!(tool_names.contains(&"verify_release"));
             assert!(!tool_names.contains(&"init_project"));
             Ok(json!({
                 "choices": [{
                     "message": {
                         "role": "assistant",
-                        "content": "QA audience check ready."
+                        "content": "QA role check ready."
                     }
                 }]
             }))
         },
     ) else {
-        panic!("audience run");
+        panic!("role run");
     };
-    assert_eq!(report.final_answer, "QA audience check ready.");
+    assert_eq!(report.final_answer, "QA role check ready.");
 }
 
 #[test]
