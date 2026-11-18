@@ -1,0 +1,17 @@
+[package]
+name = "questforge-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[package.metadata.arch]
+package_kind = "api"
+domain = "questforge"
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

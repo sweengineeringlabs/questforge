@@ -1,0 +1,24 @@
+[package]
+name = "quest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[package.metadata.arch]
+package_kind = "bin"
+
+[[bin]]
+name = "quest"
+path = "bin/main.rs"
+
+[dependencies]
+clap.workspace = true
+questforge-config.workspace = true
+questforge-doctor.workspace = true
+questforge-init.workspace = true
+questforge-toolchain.workspace = true
+
+[lints]
+workspace = true

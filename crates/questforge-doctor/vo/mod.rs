@@ -1,0 +1,9 @@
+//! Value objects module.
+//!
+//! ```compile_fail
+//! use questforge_doctor::vo::crate_data::CrateData;
+//! ```
+
+mod crate_data;
+
+pub use self::crate_data::CrateData;

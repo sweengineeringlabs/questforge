@@ -1,0 +1,386 @@
+# The vocabulary the architecture rules are written in: folder roles, name affixes and the few
+# fixed words. It names no crate, theme, module or type of any audited code, and the rules in
+# `audit/` contain none of these words; they read them from here.
+
+[folders]
+source   = "src"
+tests    = "tests"
+traits   = "traits"
+builder  = "builder"
+dto      = "dto"
+error    = "error"
+vo       = "vo"
+facade   = "svc"
+handler  = "handler"
+# Folder names that make up a flat layout, the folders of an api and the layers of an spi or std; any other
+# directory is a theme.
+artifacts = ["traits", "builder", "dto", "error", "vo", "entity", "std", "spi", "svc", "bin", "handler"]
+# Scoped artifact presence (architecture.md: Compulsory, conditional and optional)
+compulsory_artifacts  = ["traits", "error", "builder"]
+conditional_artifacts = ["dto", "entity"]
+optional_artifacts    = ["vo"]
+# Folders whose module is never `pub`: their contents are reached through the theme that owns them.
+# `builder` is not listed: both specs keep it as a public theme (open question 7 of the arch issue).
+never_public = ["traits", "dto", "error", "vo", "entity"]
+# Folders that hold the data of a contract: value objects, errors and the request/response objects.
+data = ["vo", "error", "dto"]
+# Folders that hold the implementation behind a contract.
+implementation = ["std", "spi"]
+# Folders that may sit beside a workspace, a domain or a theme without being one: they hold no contract.
+companions = ["docs", "tests", "examples", "scripts"]
+
+# The canonical word of a folder, with the variants that are accepted and warned about: `errors` is read as
+# `error`, and `doc` as `docs`. A variant is never a theme.
+[folders.variants]
+error = ["errors"]
+docs  = ["doc"]
+
+[naming]
+service_suffix         = "Svc"
+factory_suffix         = "Factory"
+builder_suffix         = "Builder"
+handler_suffix         = "Handler"
+gateway_suffix         = "Gateway"
+validator_suffix       = "Validator"
+request_suffix         = "Request"
+response_suffix        = "Response"
+error_suffix           = "Error"
+exposure_prefixes      = ["get_", "list_"]
+mutation_prefixes      = ["set_", "with_"]
+# Capabilities arrive by construction: installed through a setter with this prefix and a domain trait, never through a request field or by asking another object.
+slot_setter_prefix     = "with_"
+slot_type_prefix       = "With"
+service_method         = "builder"
+build_method           = "build"
+builder_error          = "BuilderError"
+constructors           = ["new", "try_new"]
+erasing_types          = ["Box", "Arc"]
+test_prefix            = "test_"
+test_suffix            = "_test"
+# The scenarios a test of a function is named for: `test_<function>_<condition>_<scenario>`, the three that `arch`
+# asks of every function of a public trait.
+scenarios              = ["happy", "error", "edge"]
+e2e_suffix             = "_e2e_test"
+int_suffix             = "_int_test"
+# A DTO is cloneable only when copying it is free: every field is a shared borrow or one of these types (ADR-138).
+free_to_copy_types     = ["u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32", "f64", "bool", "char", "Option"]
+# An accumulator folds fragments into a result: a trait named with the suffix, `apply(&mut self, ..)` and `finish(self)`.
+accumulator_suffix     = "Accumulator"
+accumulator_apply      = "apply"
+accumulator_finish     = "finish"
+# The constructor that can reject its input, and the scenario of the test that passes it an input it rejects.
+fallible_constructor   = "try_new"
+rejection_scenario     = "error"
+# The form a service name takes in a type name: `ion` (`Remediation`) or `tor` (`Remediator`). A consumer chooses one, once, and every service it has uses it. swartch defaults to `tor`.
+service_name_form      = "tor"
+
+# The targets the command line can narrow an audit to. Each key is a role and each value the flag words that name it
+# (`--<word>`); each target invokes its own specialized `*Audit` API directly:
+#   workspace  invokes `WorkspaceAudit`
+#   package    invokes `PackageAudit`
+#   service    invokes `SvcAudit`
+#   builder    invokes `BuilderAudit`
+#   trait      invokes `TraitsAudit`
+#   theme      invokes `ThemeAudit` (and narrows offences to `--theme <directory>`)
+#   name       with a target, only the artifact of this name: `--name <name>`; the file named for it, or the offences that name it
+# Several targets together invoke each of their APIs; a theme and a name each narrow what the targets return.
+[targets]
+workspace = ["workspace"]
+package   = ["package"]
+service   = ["svc"]
+builder   = ["builder"]
+trait     = ["trait"]
+theme     = ["theme"]
+name      = ["name"]
+handler   = ["handler"]
+dto       = ["dto"]
+vo        = ["vo"]
+gateway   = ["gateway"]
+scripts   = ["scripts"]
+configs   = ["configs"]
+bin       = ["bin"]
+repository = ["repository"]
+domain    = ["domain"]
+scm       = ["scm"]
+project   = ["project"]
+
+# The executable binary target configuration.
+[bin]
+entry_file    = "bin/main.rs"
+target_table  = "bin"
+main_function = "main"
+
+[proof]
+compile_fail = "compile_fail"
+
+# Paths that must be spelled with `core` because the item is not specific to `std`.
+[prefer_core]
+"std::fmt"   = "core::fmt"
+"std::error" = "core::error"
+
+# Where a package declares its package kind: `[package.metadata.<metadata_table>]` in its
+# manifest, under the key `package_kind`. A package cannot exempt itself from a rule: a violation is fixed.
+[manifest]
+metadata_table = "arch"
+package_kind   = "package_kind"
+project        = "project"
+domain         = "domain"
+
+# The workspace that holds the gateway packages (ingress, egress, proxy) to handler.
+[gateway]
+workspace           = "gateway"
+optional_packages   = ["ingress", "egress", "proxy"]
+compulsory_packages = []
+
+# The scripts companion folder, governing flat deployment and automation scripts or environment-nested subdirectories.
+[scripts]
+folder             = "scripts"
+environments       = ["dev", "staging", "prod", "testing", "local"]
+allowed_extensions = ["sh", "yaml", "yml", "env"]
+release_prefix     = "release_"
+bootstrap_file     = "bootstrap.sh"
+env_prefix         = ".env"
+
+# The configs companion folder, governing flat application/global configuration files or environment-nested subdirectories, and runtime boundary rules.
+[configs]
+folder              = "configs"
+environments        = ["dev", "staging", "prod", "testing", "local"]
+allowed_extensions  = ["toml", "yaml", "yml", "json"]
+app_prefix          = "app"
+global_prefix       = "global"
+ambient_env_fns     = ["var", "vars"]
+ambient_globals     = ["OnceLock", "LazyLock"]
+loader_suffix       = "ConfigLoader"
+builder_suffix      = "ConfigBuilder"
+svc_suffix          = "ConfigSvc"
+load_method         = "load"
+load_section_prefix = "load_"
+
+# The package kinds. `value` is what a manifest declares; `name_suffixes` are the package-name
+# endings that belong to the kind; `forbidden_folders` are the folders under the source folder that
+# a package of this kind never has; `home_folder`, when there is one, is the folder a package named
+# for the kind is in: `<domain>/<home_folder>/<package>`; `layer_folder`, when there is one, is the folder
+# under the source folder that holds the implementations and the prefix of their file names.
+[package_kind]
+definition = "The package kind of a package: what part of a contract it is, and so which layer of its domain the package belongs to: the api layer, or the core layer, of which std and spi are varieties. It is a variety of the package level, declared in the manifest of the package, and it fixes the name suffix, the folders the package never has, and whether the package sits in the core layer of its domain."
+
+[package_kind.api]
+value             = "api"
+definition        = "The api layer. Declares the traits and the types they use. It sits directly under its domain."
+name_suffixes     = ["-api"]
+forbidden_folders = ["api", "std", "spi", "svc"]
+
+[package_kind.api_ingress]
+value             = "api_ingress"
+definition        = "The inbound driving contract workspace package: declares driving domain service traits (*Svc) and external consumer request/response DTOs."
+name_suffixes     = ["-api-ingress"]
+forbidden_folders = ["api", "std", "spi", "svc", "gateway", "handler"]
+home_folder       = "api"
+
+[package_kind.api_egress]
+value             = "api_egress"
+definition        = "The outbound driven contract workspace package: declares driven outbound traits (*Port or domain egress traits) and outbound DTOs."
+name_suffixes     = ["-api-egress"]
+forbidden_folders = ["api", "std", "spi", "svc", "gateway", "handler"]
+home_folder       = "api"
+
+[package_kind.lib]
+value             = "lib"
+definition        = "A shared library or in-domain utility crate: declares domain traits and functions operating directly on Value Objects and domain types without boundary DTO encapsulation."
+name_suffixes     = ["-lib"]
+forbidden_folders = ["api", "std", "spi", "svc", "dto"]
+home_folder       = "core"
+
+[package_kind.spi]
+value             = "spi"
+definition        = "A variety of core. Implements an api and relies on an external dependency: an api of another domain. It sits in the core layer of its domain."
+name_suffixes     = ["-spi"]
+forbidden_folders = ["std"]
+home_folder       = "core"
+layer_folder      = "spi"
+
+[package_kind.std]
+value             = "std"
+definition        = "A variety of core. Implements an api with no external dependency: it depends only on apis of its own domain. It sits in the core layer of its domain."
+name_suffixes     = ["-std"]
+forbidden_folders = ["spi"]
+home_folder       = "core"
+layer_folder      = "std"
+
+# An executable. No suffix and no forbidden folder is ruled for it.
+[package_kind.bin]
+value             = "bin"
+definition        = "An executable: its entry is bin/main.rs."
+name_suffixes     = []
+forbidden_folders = ["traits", "dto", "vo", "api", "std", "spi", "svc", "builder"]
+
+[package_kind.handler]
+value             = "handler"
+definition        = "A mediation and dispatch package: pure stateless dispatch routing incoming gateway payloads to domain services."
+name_suffixes     = ["-handler"]
+forbidden_folders = ["traits", "dto", "vo", "api", "std", "spi", "svc", "builder"]
+
+[package_kind.gateway]
+value             = "gateway"
+definition        = "A transport and protocol state package: manages external connections, TLS, streams, and routes to handler."
+name_suffixes     = ["-gateway"]
+forbidden_folders = ["traits", "dto", "vo", "api", "std", "spi", "svc", "builder"]
+
+[package_kind.ingress]
+value             = "ingress"
+definition        = "An inbound protocol adapter package: HTTP, gRPC, WebSocket listeners routing into handler."
+name_suffixes     = ["-ingress-gateway"]
+forbidden_folders = ["traits", "dto", "vo", "api", "std", "spi", "svc", "builder"]
+home_folder       = "gateway"
+
+[package_kind.egress]
+value             = "egress"
+definition        = "An outbound protocol adapter package: client connections, external APIs, and egress channels."
+name_suffixes     = ["-egress-gateway"]
+forbidden_folders = ["traits", "dto", "vo", "api", "std", "spi", "svc", "builder"]
+home_folder       = "gateway"
+
+# The crate root file, the file that declares the modules of a folder, and the suffix of the local file of an implementation.
+# The first two may sit outside an artifact folder.
+[layout]
+crate_root_file = "lib.rs"
+module_file     = "mod.rs"
+# The local file of an implementation (std, spi) holds the helpers of the implementation of one api trait. It is named
+# `<trait><local_suffix>.rs`, with the snake-case name of that trait (`ast_local.rs` for `Ast`), and never starts with the layer
+# (`std_`, `spi_`). It declares nothing `pub` and no free function, implements no api trait, is used by the implementation of its trait
+# only, is never named by the public surface of the package, and sits beside that implementation. The contract is ADR-135, decision 12.
+local_suffix    = "_local"
+# The file a folder is created with by a fix: git does not keep an empty folder.
+keep_file       = ".gitkeep"
+
+# Every level is found by its position relative to one landmark, the anchor: the source folder (`src`) of a package. The package folder is the parent of the anchor; the core layer,
+# the domain and the workspaces are found by going up from the package folder; a theme and an artifact folder are found by going down from the anchor. A level whose position does
+# not depend on the anchor (a companion folder, a folder the rules do not decide) says no position.
+# What each level of a tree is. A tree is labelled from the bottom up: the packages first, the domains from the packages, the
+# workspaces from the domains. The words are the keys; a level is not a Cargo notion, so a workspace here needs no manifest.
+[levels]
+workspace       = "A folder of multi form that holds domains, other workspaces, or packages outside a domain: it has a package somewhere below it, is not a domain, is not inside a domain and is not a package. It needs no manifest: a manifest with a workspace table at that folder makes it Cargo's workspace as well, but the level does not depend on it. A folder that holds one domain or workspace and nothing else is labelled a workspace too, and is reported as a lone child. Going up from the anchor of a package, a workspace is found above the package folder and above the domain."
+domain          = "A folder that holds an api package, or a core layer with packages in it: the parent of an api package, or the folder above the core layer of an spi or std package. From the anchor of a package the domain is two folders up for an api package (the package folder, then the domain) and three folders up for an spi or std package (the package folder, the core layer, then the domain)."
+package         = "A folder that is, or should be, a crate: it has a manifest that declares a package, or a source folder, or an artifact folder with Rust files directly in it. A package is not entered further, and a companion folder is never entered. A package has a package kind, which is its layer in its domain, and a form. Its anchor, the source folder, sits directly inside it, and its themes and artifact folders sit directly inside the anchor. An api package sits directly inside its domain; an spi or std package sits directly inside the core layer of its domain."
+core            = "The core layer of a domain, and the folder that holds it: the folder of a domain that holds its spi and std packages. A domain has two layers, the api layer and the core layer; std and spi are varieties of core. Implementations grow over time, so the core layer organizes them in advance. It sits directly inside its domain, beside the api package, and each of its packages sits directly inside it."
+theme           = "A directory directly inside the source folder of a package that is not an artifact folder and not a companion folder. A theme is one contract: a trait with the requests and responses of its operations, its error and its value objects, each in the artifact folder of its kind, so that the contract moves as a unit. A theme is a leaf: it holds no theme of its own. It sits inside the anchor, beside the artifact folders and the other themes of its package. The themes give their package its form: a package with no theme is single (flat), a package with at least two themes is multi, and a package with exactly one theme is reported as a lone theme."
+artifact_folder = "A folder named by one of the artifact folders of this vocabulary, or by a variant of one. It sits directly inside the anchor of a package, or directly inside a theme, beside the other artifact folders."
+companion       = "A folder that may sit beside a workspace, a domain or a theme without being one: it holds no contract."
+project         = "The root of a project: the folder an audit of a project is pointed at, found by being that root and not by an anchor. It has the entries of the repository, which its shape takes the union of, and its own: the documents folder, the readme and the scm folder (the code-related container, which is named by its own shape). It holds no domain and no package directly: the code is in the scm folder. The name of the project is declared in the workspace manifest or manifests, under `[workspace.metadata.arch]` as `project`, as a snake_case name that is a crate-name prefix; every workspace that declares it declares the same, and a project with none declared is an error, not a guess."
+scm             = "Software Configuration Management is the discipline of controlling everything that makes up a software system as it changes. It is the code-related container of a project: a folder directly in the root of the project, beside the documents folder and the entries of the repository, and found by its name (the `root_dir` of its shape), not by an anchor. It is defined by its own entries and has nothing to do with the repository: its shape takes no union of the repository's. Its shape requires the folders `main`, `configs`, `schemas`, `scripts`, `docs`, `env` and `infra`; the folders `configs`, `scripts`, `env` and `infra` of the project root are moved into it as they are. The domains and workspaces of the project are in it."
+repository      = "A folder that is under source control, found by its entries and not by an anchor: it has no source folder. Its shape requires the entries `.git`, `.gitignore`, `.gitattributes`, `.github` and `.githooks`, and the shapes of a project and of a workspace take the union of it."
+unknown         = "A folder the rules do not decide; the reason is on the labelled folder."
+
+# The shape of a term that is a folder with entries and not a crate. A shape is defined by its entries, not by what they contain: `required` entries must be there, `optional`
+# entries may be, and a shape takes the entries of the shapes in `union_of` too. An entry with `adopt = true` is filled, when it is missing, by the folder of its name in the folder above, moved as it is, before a slot is made for it. `marker` is the entry that makes a folder one of this shape; `source_dir` is left out when the shape has no source folder. An entry is a `file`, a `folder`, or `either` (`.git` is a file in a worktree and in a submodule).
+[shapes.repository]
+root_dir  = "same as parent"
+marker    = ".git"
+required  = [
+    { name = ".git", kind = "either" },
+    { name = ".gitignore", kind = "file" },
+    { name = ".gitattributes", kind = "file" },
+    { name = ".github", kind = "folder" },
+    { name = ".githooks", kind = "folder" },
+]
+optional  = []
+union_of  = []
+
+[shapes.scm]
+root_dir  = "scm"
+required  = [
+    { name = "main", kind = "folder" },
+    { name = "configs", kind = "folder", adopt = true },
+    { name = "schemas", kind = "folder" },
+    { name = "scripts", kind = "folder", adopt = true },
+    { name = "docs", kind = "folder" },
+    { name = "env", kind = "folder", adopt = true },
+    { name = "infra", kind = "folder", adopt = true },
+]
+optional  = []
+union_of  = []
+
+[shapes.project]
+root_dir  = "same as parent"
+required  = [
+    { name = "docs", kind = "folder" },
+    { name = "README.md", kind = "file", content = "# {project}\n" },
+    { root_of = "scm", kind = "folder" },
+]
+optional  = [
+    { name = ".claude", kind = "folder" },
+]
+union_of  = ["repository"]
+
+# The form of a scope: a workspace or a package. It is decided by how many children the scope holds directly: for a
+# workspace the domains, workspaces and packages below it, for a package its themes.
+[forms]
+definition = "How a scope divides into its children. It is multi when the scope holds at least two of them directly, and single otherwise. A workspace and a package each have one."
+single     = "The scope holds at most one child. A package is flat: the artifact folders sit directly under the source folder, and one theme folder alone in a scope is reported as a lone theme. A workspace that holds one domain or workspace is reported as a lone child."
+multi      = "The scope holds at least two children, one folder each. A workspace is multi: that is what makes a folder a workspace. A package is multi when it has several themes."
+
+# How far apart the levels may be, measured on scm/main (edge-llm#396): a package is one folder below its domain
+# when it is the api package and two when it is in the core layer; a domain is below at most this many workspaces.
+#
+# Topological Workspace Membership Calculus:
+# - Universe of discovered packages P and autonomous workspaces W.
+# - Direct Workspace Members:
+#     Members(W) = { P in P | P subpath W and not exists W' in W \ {W} s.t. P subpath W' subpath W }
+# - Autonomous Child Workspace Exclusions:
+#     Exclude(W) = { W' in W \ {W} | W' subpath W and not exists W'' in W \ {W, W'} s.t. W' subpath W'' subpath W }
+# - Parity Invariant (WORKSPACE_ERR_003):
+#     for all W in W: Manifest(W).members == Members(W) and Manifest(W).exclude == Exclude(W)
+[limits]
+domain_package_depth = 2
+workspaces_domain_depth = 2
+
+# The most traits a package may declare directly in its traits folder (the package root) before it is split by theme: a package past this has to move some of its
+# traits, each with the data of its operations, into themes (large_scope_is_split_by_theme). A theme is a leaf and is never split.
+package_themes_required_when_contracts_count_more_than = 2
+
+# Rust's own words that a rule reads, so that no rule spells one: the attribute that holds a doc comment, the traits that
+# erase a type (a value held as one of them can be anything) and the traits of a closure.
+[language]
+doc_attribute  = "doc"
+opaque_traits  = ["Any"]
+closure_traits = ["Fn", "FnMut", "FnOnce"]
+
+# The Book Architecture conceptual mapping: translates architecture concepts into the Book metaphor
+# (subject -> chapter -> part -> section -> paragraph -> sentence).
+[book]
+subject   = "A macro-domain or territory grouping of chapters under a workspace (e.g. governance, execution, generation)."
+chapter   = "A domain bounded context: an opening contract (api) and core engines (std, spi, lib)."
+part      = "A layer or package division within a chapter: the contract part (api) or an implementation engine (core/std, core/spi, core/lib)."
+section   = "A theme leaf capability module under a chapter part. A chapter contract that grows past the limit splits into sections (large_scope_is_split_by_theme); a section holds no subsection (theme_is_a_leaf)."
+paragraph = "A contract or artifact unit: an interface trait, a value object, an error, or a request/response DTO."
+sentence  = "An atomic executable statement: a read accessor or a domain operation method."
+
+# The services, each with its name in each form. The types of a service end in a suffix of [naming] (`Svc`, `Builder`, `Handler`) and share the name before it
+# (`RemediatorSvc`, `RemediatorBuilder`, `RemediatorHandler`). A service name is a noun, never a verb: the verb belongs to an operation and its DTOs
+# (`RemediateRemediatorRequest`). The names are listed, not derived from a root (`audit` and `ion` would make "audition"). A name that is neither form of a
+# listed service is reported, and is never added to make it pass.
+[services.ast]
+ion = "Ast"
+tor = "Ast"
+
+[services.audit]
+ion = "Audit"
+tor = "Auditor"
+
+[services.generation]
+ion = "Generation"
+tor = "Generator"
+
+[services.remediation]
+ion = "Remediation"
+tor = "Remediator"
+
+[services.template_rendering]
+ion = "TemplateRendering"
+tor = "TemplateRenderer"
+
+# The kernel: the standard architecture that the other domains build on (the term model, the operations on a term, the vocabulary). Its name is a noun that has no
+# second form, as `Ast` has none.
+[services.kernel]
+ion = "Kernel"
+tor = "Kernel"
