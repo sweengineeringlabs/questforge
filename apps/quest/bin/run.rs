@@ -54,7 +54,7 @@ enum Commands {
     Agent(AgentArgs),
     /// Authenticate or inspect OAuth/API-key credentials for LLM providers (`gemini`, `openai`, `anthropic`)
     Auth(AuthArgs),
-    /// Manage Quest lab and device fleets (discover, deploy, rollback, telemetry, logcat, screenshot)
+    /// Manage Quest lab fleets, enterprise MDM push (`hms-push`), and Meta Horizon Store (`store`)
     Ops(OpsArgs),
     /// Run the QuestForge hosted control plane HTTP server
     Serve(ServeArgs),

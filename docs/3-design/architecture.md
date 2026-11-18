@@ -30,7 +30,7 @@ flowchart TD
         Init["questforge-init (quest init, sync, check)"]
         CI["questforge-ci (Build, Rust APK, CycloneDX SBOM)"]
         Verify["questforge-verify (QV-001..QV-006 Scorecards)"]
-        MCP["questforge-mcp (12 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
+        MCP["questforge-mcp (14 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
         Ops["questforge-ops (ADB Fleet + Agent + HMS/MDM Push)"]
         Server["questforge-server (REST API, JWT RBAC, PostgreSQL)"]
     end

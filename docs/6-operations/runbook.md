@@ -106,6 +106,22 @@ quest ops hms-push --provider meta-hms --app-id com.studio.app --apk dist/orbit-
 quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk
 ```
 
+### AI Agents & Meta Horizon Store (`quest auth`, `quest agent --role`, `quest ops store`)
+Authenticate or inspect OAuth/API-key status (`gemini`, `openai`, `anthropic`):
+```pwsh
+quest auth --status
+quest auth --provider gemini
+```
+Run a role-based AI XR agent (`studio`, `enterprise`, `platform`, `qa`, `developer`) over 14 MCP tools:
+```pwsh
+quest agent --role qa --provider gemini --auth --prompt "Verify examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk and upload to ALPHA for app_id <APP_ID>"
+```
+Or run any 1:1 `ovr-platform-util` Store operation directly (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`):
+```pwsh
+$env:QUEST_META_APP_SECRET = "<your-meta-app-secret>"
+quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
+```
+
 ---
 
 ## 6. Troubleshooting
