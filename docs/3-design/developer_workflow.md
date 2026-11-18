@@ -136,6 +136,83 @@ quest ops deploy local-dev my-quest-app/dist/my-quest-app-0.1.0.apk
 quest ops logcat <serial> --out my-quest-app/dist/logcat.txt
 ```
 
+### XR Coding, Scene Authoring & Manifest Workflow
+
+During step 4 of the inner loop, developers write gameplay, interaction, and rendering code while keeping three project artifacts synchronized with `quest doctor` (`QD-001`, `QD-006`, `QD-009`) and `quest verify` (`QV-001`–`QV-006`).
+
+```mermaid
+flowchart TD
+    Manifest["quest_forge.yaml (Single Source of Truth)"] --> Unity["Unity C# (Assets/Scripts/ & Packages/manifest.json)"]
+    Manifest --> Unreal["Unreal C++ / Blueprints (Source/ & QuestApp.uproject)"]
+    Unity --> AndroidManifest["Assets/Plugins/Android/AndroidManifest.xml"]
+    Unreal --> AndroidManifest
+    Unity --> Builder["Assets/Editor/QuestForgeBuild.cs (IL2CPP + ARM64)"]
+    Unreal --> UAT["RunUAT BuildCookRun (ASTC + ARM64)"]
+    AndroidManifest --> VRC["Meta VRC Compliance (QV-003, QV-004, QV-005)"]
+    Builder --> APK["Signed Release APK"]
+    UAT --> APK
+    VRC --> APK
+```
+
+#### 1. Project Manifest (`quest_forge.yaml`)
+Every engine version, target Quest headset, SDK version, and signing variable is declared in `quest_forge.yaml` so `quest doctor` (`QD-001`, `QD-006`) can catch configuration drift immediately:
+
+```yaml
+version: "1"
+project:
+  name: my-quest-app
+  package_id: com.studio.myquestapp
+  engine: unity
+  engine_version: "2022.3.42f1"
+targets:
+  devices: [quest2, quest3, quest3s, questpro]
+  min_android_api: 32
+  target_android_api: 34
+sdk:
+  openxr: true
+  meta_xr_sdk: "68.0.0"
+```
+
+#### 2. Writing Unity XR C# Code (`Assets/Scripts/` & `Assets/Editor/QuestForgeBuild.cs`)
+- **Runtime XR Scripts (`Assets/Scripts/QuestRigController.cs`):** Write OpenXR / Meta XR SDK (`com.meta.xr.sdk.all`, `com.unity.xr.openxr`) scripts targeting 72/90/120 Hz display refresh rates, controller/hand-tracking input, and passthrough layers:
+  ```csharp
+  using UnityEngine;
+  using UnityEngine.XR;
+
+  namespace MyQuestApp
+  {
+      public sealed class QuestRigController : MonoBehaviour
+      {
+          [SerializeField] private float targetRefreshRate = 90f;
+
+          private void Start()
+          {
+              Application.targetFrameRate = Mathf.RoundToInt(targetRefreshRate);
+              Debug.Log($"[QuestForge] XR Device Active: {XRSettings.loadedDeviceName}");
+          }
+      }
+  }
+  ```
+- **Headless Build Hook (`Assets/Editor/QuestForgeBuild.cs`):** Scaffolded by `quest init` and invoked automatically by `quest ci` (`-batchmode -nographics -executeMethod QuestForge.Build.BuildQuestApk`). It enforces `ScriptingImplementation.IL2CPP` and `AndroidArchitecture.ARM64` so the output binary always satisfies `QV-003` (`arm64-v8a` ABI compliance).
+
+#### 3. Writing Unreal Engine C++ / Blueprints (`QuestApp.uproject`)
+- Enable the `OpenXR` and `MetaXR` plugins in `QuestApp.uproject` and configure `DefaultEngine.ini` for Vulkan / Mobile Multi-View and ASTC texture compression (`Android_ASTC`).
+- `quest ci` invokes `RunUAT BuildCookRun -platform=Android -cookflavor=ASTC -clientconfig=Shipping` to compile C++ modules and cook `.pak` assets into a signed APK.
+
+#### 4. Authoring a VRC-Compliant `AndroidManifest.xml`
+To pass `QV-004` (Meta VRC Manifest Policy) and `QV-005` (Permissions Audit) on the first try:
+- Set `package="com.studio.myquestapp"` matching `project.package_id` in `quest_forge.yaml`.
+- Ensure `android:debuggable="false"` on `<application>` for release builds.
+- Declare `<uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />`.
+- Include the Horizon OS VR launch category `<category android:name="com.oculus.intent.category.VR" />`.
+- Avoid unapproved sensitive Android permissions (`READ_CONTACTS`, `READ_SMS`, `ACCESS_FINE_LOCATION`, `SYSTEM_ALERT_WINDOW`).
+
+#### 5. Enforcing Repository Architecture While Coding (`swartch`)
+Before committing code changes, run the repository architecture check (`QD-009`) against `config/vocabulary.toml`:
+```pwsh
+swartch --vocabulary config/vocabulary.toml .
+```
+
 ---
 
 ## 3. Actor 2: AI-Native XR Developer & Coding Agent
