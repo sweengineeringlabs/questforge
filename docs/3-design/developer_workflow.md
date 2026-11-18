@@ -24,7 +24,7 @@ flowchart TD
         Check["quest check (SPEC/SYNC/VRC/OXR/PERF)"]
         Setup["quest setup (Zero-Trust SHA-256)"]
         Doctor["quest doctor --fix (QD-001..QD-009)"]
-        MCP["quest mcp (11 JSON-RPC 2.0 Tools)"]
+        MCP["quest mcp (12 JSON-RPC 2.0 Tools)"]
         CI["quest ci (Build + CycloneDX SBOM)"]
         Verify["quest verify (QV-001..QV-006)"]
         Ops["quest ops (ADB Fleet + hms-push)"]
@@ -330,6 +330,7 @@ sequenceDiagram
 | `search_docs` | Searches QuestForge VRC, doctor, and configuration documentation |
 | `fleet_discover` | Discovers connected Quest headsets or emulators over `adb` and updates fleet inventory |
 | `publish_mdm` | Publishes verified APKs to Meta HMS (`graph.oculus.com`), ManageXR (`managexrapi.com`), or ArborXR (`api.xrdm.app`) |
+| `setup_toolchain` | Provisions and SHA-256-verifies `adb`, `cmdline-tools`, and `ovr-platform-util` (`quest setup`) |
 
 ---
 

@@ -42,7 +42,7 @@ quest ops hms-push --provider meta-hms --app-id <id> --apk my-quest-app/dist/my-
 | `crates/questforge-doctor` | `lib` | `QD-001`–`QD-009` diagnostics, `XR_RUNTIME_JSON` check, & `--fix` |
 | `crates/questforge-ci` | `lib` | Unity/Unreal/Rust builds, Rust APK packager, CycloneDX SBOM, & CI templates |
 | `crates/questforge-verify` | `lib` | Static APK & Meta VRC validator (`QV-001`–`QV-006`) in CLI/JSON/SARIF/HTML/PDF |
-| `crates/questforge-mcp` | `lib` | JSON-RPC 2.0 stdio MCP server exposing 11 AI agent tools |
+| `crates/questforge-mcp` | `lib` | JSON-RPC 2.0 stdio MCP server exposing 12 AI agent tools |
 | `crates/questforge-ops` | `lib` | ADB lab fleet manager, polling `agent`, & Meta HMS/ManageXR/ArborXR push |
 | `crates/questforge-server` | `lib` | Control Plane REST API, PostgreSQL store, HS256 JWT RBAC, & `/api/audit` |
 | `web/` | `mweb` | `machineweb` (`mweb`) + Bun `1.4.2` + TypeScript `7.0.2` dashboard |

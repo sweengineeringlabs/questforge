@@ -40,7 +40,7 @@ fn test_mcp_initialize_and_tools_list_happy() {
                     .as_ref()
                     .and_then(|v| v.get("tools"))
                     .and_then(|t| t.as_array())
-                    .is_some_and(|arr| arr.len() == 11)
+                    .is_some_and(|arr| arr.len() == 12)
     ));
 }
 
@@ -216,7 +216,7 @@ fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
     assert!(matches!(
         res,
         Ok(ref r)
-            if r.discovered_tools.len() == 11
+            if r.discovered_tools.len() == 12
                 && r.steps.len() == 1
                 && r.steps[0].tool == "check_source"
                 && r.steps[0].ok

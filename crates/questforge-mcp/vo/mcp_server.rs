@@ -9,6 +9,7 @@ use questforge_config::EngineKind;
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
+use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, VerifyOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -145,7 +146,7 @@ impl QuestMcpServer {
             },
             McpToolDefinition {
                 name: "build_project".to_string(),
-                description: "Run or plan Quest CI build, metadata, SBOM, and dependency scan for a QuestForge project.".to_string(),
+                description: "Run or plan Quest CI build, metadata, SBOM, dependency scan, and optional Meta Horizon Store upload (`ovr-platform-util`).".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "required": ["project_dir"],
@@ -153,6 +154,8 @@ impl QuestMcpServer {
                         "project_dir": { "type": "string" },
                         "output_dir": { "type": "string", "default": "dist" },
                         "release_version": { "type": "string", "default": "0.1.0" },
+                        "upload_channel": { "type": "string" },
+                        "app_id": { "type": "string" },
                         "dry_run": { "type": "boolean", "default": true }
                     }
                 }),
@@ -227,6 +230,24 @@ impl QuestMcpServer {
                         "device_group": { "type": "string", "default": "default" },
                         "endpoint": { "type": "string" },
                         "token_env": { "type": "string", "default": "QUESTFORGE_MDM_TOKEN" }
+                    }
+                }),
+            },
+            McpToolDefinition {
+                name: "setup_toolchain".to_string(),
+                description: "Provision and SHA-256-verify MetaVR CLI binaries (adb, cmdline-tools, ovr-platform-util) into ~/.questforge/cache.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project_dir": { "type": "string", "default": "." },
+                        "adb_version": { "type": "string" },
+                        "adb_sha256": { "type": "string" },
+                        "cmdline_tools_version": { "type": "string" },
+                        "cmdline_tools_sha256": { "type": "string" },
+                        "ovr_version": { "type": "string" },
+                        "ovr_url": { "type": "string" },
+                        "ovr_sha256": { "type": "string" },
+                        "allow_unverified": { "type": "boolean", "default": false }
                     }
                 }),
             },
@@ -346,6 +367,7 @@ impl QuestMcpServer {
             "search_docs" => self.call_search_docs(&args),
             "fleet_discover" => call_fleet_discover(&args),
             "publish_mdm" => call_publish_mdm(&args),
+            "setup_toolchain" => call_setup_toolchain(&args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -512,6 +534,14 @@ fn call_build(args: &Value) -> Result<String, String> {
         .get("release_version")
         .and_then(|v| v.as_str())
         .unwrap_or("0.1.0");
+    let upload_channel = args
+        .get("upload_channel")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
+    let app_id = args
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
     let dry_run = args
         .get("dry_run")
         .and_then(|v| v.as_bool())
@@ -521,8 +551,8 @@ fn call_build(args: &Value) -> Result<String, String> {
         project_dir: PathBuf::from(project_dir),
         output_dir: PathBuf::from(output_dir),
         release_version: release_version.to_string(),
-        upload_channel: None,
-        app_id: None,
+        upload_channel,
+        app_id,
         dry_run,
     })
     .map_err(|e| e.to_string())?;
@@ -666,6 +696,55 @@ fn call_publish_mdm(args: &Value) -> Result<String, String> {
     )
     .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
+}
+
+fn call_setup_toolchain(args: &Value) -> Result<String, String> {
+    let project_dir = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from);
+    let allow_unverified = args
+        .get("allow_unverified")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let cmdline_tools_version = args
+        .get("cmdline_tools_version")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
+
+    let report = ToolchainProvisioner::provision(&SetupOptions {
+        project_dir,
+        adb_version: args
+            .get("adb_version")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        adb_sha256: args
+            .get("adb_sha256")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        include_cmdline_tools: cmdline_tools_version.is_some(),
+        cmdline_tools_version,
+        cmdline_tools_sha256: args
+            .get("cmdline_tools_sha256")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        ovr_version: args
+            .get("ovr_version")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        ovr_url: args
+            .get("ovr_url")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        ovr_sha256: args
+            .get("ovr_sha256")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        cache_dir: None,
+        require_checksum: !allow_unverified,
+    })
+    .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
 fn collect_doc_hits(dir: &Path, needle: &str, hits: &mut Vec<Value>) {
