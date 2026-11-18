@@ -1,13 +1,13 @@
 //! # questforge-config
 //!
-//! Shared configuration schema and manifest definitions for QuestForge.
+//! Shared `questforge.yaml` manifest schema, validation, and engine auto-detection.
 //!
 //! ```compile_fail
-//! use questforge_config::error::CrateError;
+//! use questforge_config::error::ConfigError;
 //! ```
 //!
 //! ```compile_fail
-//! use questforge_config::vo::CrateData;
+//! use questforge_config::vo::QuestforgeConfig;
 //! ```
 
 #![deny(unsafe_code)]
@@ -15,5 +15,8 @@
 mod error;
 mod vo;
 
-pub use self::error::CrateError;
-pub use self::vo::CrateData;
+pub use self::error::ConfigError;
+pub use self::vo::{
+    EngineKind, MetaVrCliConfig, ProjectConfig, QuestDevice, QuestforgeConfig, SdkConfig,
+    SigningConfig, TargetsConfig, ToolchainConfig,
+};

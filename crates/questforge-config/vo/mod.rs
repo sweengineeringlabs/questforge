@@ -1,9 +1,12 @@
 //! Value objects module.
 //!
 //! ```compile_fail
-//! use questforge_config::vo::crate_data::CrateData;
+//! use questforge_config::vo::questforge_config::QuestforgeConfig;
 //! ```
 
-mod crate_data;
+mod questforge_config;
 
-pub use self::crate_data::CrateData;
+pub use self::questforge_config::{
+    EngineKind, MetaVrCliConfig, ProjectConfig, QuestDevice, QuestforgeConfig, SdkConfig,
+    SigningConfig, TargetsConfig, ToolchainConfig,
+};
