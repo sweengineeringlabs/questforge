@@ -57,14 +57,16 @@ pub struct ProjectConfig {
     pub engine_version: Option<String>,
 }
 
-/// Supported XR game engines.
+/// Supported XR game engines and native stacks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineKind {
-    /// Unity Editor.
+    /// Unity Editor (C# / IL2CPP).
     Unity,
-    /// Unreal Engine.
+    /// Unreal Engine (C++ / Blueprints).
     Unreal,
+    /// Native Rust OpenXR (`openxr` + Android NDK `arm64-v8a`).
+    Rust,
 }
 
 /// Target hardware and Android API configuration.
@@ -569,7 +571,30 @@ fn detect_engine_version(
     match engine {
         EngineKind::Unity => detect_unity_version(project_dir),
         EngineKind::Unreal => detect_unreal_version(project_dir),
+        EngineKind::Rust => detect_rust_version(project_dir),
     }
+}
+
+fn detect_rust_version(project_dir: &Path) -> Result<Option<String>, ConfigError> {
+    let toolchain_file = project_dir.join("rust-toolchain.toml");
+    if toolchain_file.exists() {
+        let content = fs::read_to_string(&toolchain_file).map_err(|source| ConfigError::Io {
+            path: toolchain_file,
+            source,
+        })?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("channel") {
+                if let Some((_, val)) = rest.split_once('=') {
+                    let clean = val.trim().trim_matches('"');
+                    if !clean.is_empty() {
+                        return Ok(Some(clean.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
 }
 
 fn detect_unity_version(project_dir: &Path) -> Result<Option<String>, ConfigError> {

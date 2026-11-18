@@ -173,3 +173,31 @@ xr_features:
                 && r.findings.iter().any(|f| f.code == "QF-PERF-001" && !f.passed)
     ));
 }
+
+#[test]
+fn test_scaffold_rust_openxr_project_sync_and_check_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let target = dir.path().join("my-rust-quest");
+    let opts = InitOptions {
+        target_dir: target.clone(),
+        name: "my-rust-quest".to_string(),
+        package_id: "com.acme.rustquest".to_string(),
+        engine: EngineKind::Rust,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    };
+
+    assert!(ProjectScaffolder::scaffold(&opts).is_ok());
+    assert!(target.join("Cargo.toml").exists());
+    assert!(target.join("rust-toolchain.toml").exists());
+    assert!(target.join("AndroidManifest.xml").exists());
+    assert!(target.join("src/questforge_bootstrap_gen.rs").exists());
+    assert!(target.join("src/main_arena_xr_scene_gen.rs").exists());
+    assert!(target.join("src/main_arena_actions.rs").exists());
+
+    let check = ProjectScaffolder::check_project(&target);
+    assert!(matches!(check, Ok(ref r) if r.passed && r.findings.len() == 4));
+}

@@ -265,6 +265,19 @@ quest check --project-dir my-quest-app
 swartch --vocabulary config/vocabulary.toml .
 ```
 
+#### 6. Multi-Engine Codegen Matrix & Roadmap
+
+`quest sync` and `quest check` work identically across **Unity**, **Unreal Engine**, and **Native Rust OpenXR** today, with additional targets tracked on the roadmap (`#18`):
+
+| Engine Target | Status | `quest_forge.yaml` | Generated Bootstrap | Generated Scene Code (`specs/*_xr.yaml`) | User Handler File |
+|---|---|---|---|---|---|
+| **Unity (C# / IL2CPP)** | **Shipped** | `engine: unity` | `Assets/Generated/QuestForgeBootstrap.gen.cs` | `Assets/Generated/<Scene>XrScene.gen.cs` | `Assets/Scripts/MainArenaActions.cs` |
+| **Unreal Engine (C++)** | **Shipped** | `engine: unreal` | `Source/QuestForge/QuestForgeBootstrap.gen.h` | `Source/QuestForge/<Scene>XrScene.gen.h` | `Source/QuestForge/MainArenaActions.h` |
+| **Native Rust OpenXR** | **Shipped** | `engine: rust` | `src/questforge_bootstrap_gen.rs` | `src/<scene>_xr_scene_gen.rs` | `src/main_arena_actions.rs` |
+| **Godot 4 OpenXR** | **Roadmap (`#18`)** | `engine: godot` | `addons/questforge/bootstrap.gen.gd` | `addons/questforge/<scene>_xr_scene.gen.gd` | `scripts/main_arena_actions.gd` |
+| **Native C++ OpenXR** | **Roadmap (`#18`)** | `engine: cpp` | `include/questforge_bootstrap.gen.hpp` | `include/<scene>_xr_scene.gen.hpp` | `src/main_arena_actions.cpp` |
+| **WebXR + `wgpu` (`mweb`)** | **Roadmap (`#18`)** | `engine: webxr` | `src/generated/questforge_bootstrap.gen.ts` | `src/generated/<scene>_xr_scene.gen.ts` | `src/features/main_arena_actions.ts` |
+
 ---
 
 ## 3. Actor 2: AI-Native XR Developer & Coding Agent

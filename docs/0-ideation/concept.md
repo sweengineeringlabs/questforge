@@ -52,3 +52,17 @@ It unifies project scaffolding, zero-trust toolchain provisioning, environment d
 - **Developer Wedge (Free / Open-Source CLI):** `quest` (`init`, `setup`, `doctor`, `ci`, `verify`, `mcp`) drives bottom-up adoption.
 - **Commercial / Enterprise Tier:** `quest serve` + `web/` control plane + `quest ops agent` (PostgreSQL persistence, JWT/OIDC + RBAC, immutable audit logs, compliance scorecards, and lab fleet orchestration).
 - **Positioning Edge:** QuestForge **complements** kiosk MDMs (ManageXR, ArborXR, Meta Horizon Managed Services)—owning **build → verify → compliance → QA lab rollout**, while MDMs own end-user kiosk distribution.
+
+---
+
+## Supported Engines & Roadmap
+
+### Shipped Today (v0.1)
+1. **Unity (`engine: unity`)** — C# / IL2CPP + OpenXR (`com.unity.xr.openxr`) + Meta XR SDK (`com.meta.xr.sdk.all`), declarative `*.gen.cs` bootstrap and scene controller codegen.
+2. **Unreal Engine (`engine: unreal`)** — C++ / Blueprints + OpenXR + `MetaXR`, declarative `*.gen.h` and `Config/DefaultEngine.ini` codegen.
+3. **Native Rust OpenXR (`engine: rust`)** — Pure Rust (`1.100.0`) + `openxr` crate (`cdylib` targeting `aarch64-linux-android`), declarative `src/questforge_bootstrap_gen.rs` and `src/*_xr_scene_gen.rs` trait/dispatcher codegen.
+
+### Roadmap (Tracked in Issue `#18`)
+4. **Godot 4 OpenXR (`engine: godot`)** — `project.godot` + `godot_openxr_vendors` (Meta OpenXR Vendors plugin) + GDScript / `gdext` Rust scene codegen.
+5. **Native C++ OpenXR Mobile SDK (`engine: cpp`)** — CMake + Gradle + Meta OpenXR Mobile SDK (`ovr_openxr_mobile_sdk`).
+6. **WebXR / `wgpu` Progressive Web App (`engine: webxr`)** — `machineweb` (`mweb`) + Rust `wasm32-unknown-unknown` (`wgpu` + WebXR Device API) for Meta Quest Browser and Horizon Store PWA packaging.

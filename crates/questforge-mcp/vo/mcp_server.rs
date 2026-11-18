@@ -136,7 +136,7 @@ impl QuestMcpServer {
                         "target_dir": { "type": "string" },
                         "name": { "type": "string" },
                         "package_id": { "type": "string" },
-                        "engine": { "type": "string", "enum": ["unity", "unreal"] },
+                        "engine": { "type": "string", "enum": ["unity", "unreal", "rust"] },
                         "engine_version": { "type": "string" },
                         "force": { "type": "boolean", "default": false }
                     }
@@ -442,7 +442,12 @@ fn call_init(args: &Value) -> Result<String, String> {
     let engine = match args.get("engine").and_then(|v| v.as_str()) {
         Some("unity") => EngineKind::Unity,
         Some("unreal") => EngineKind::Unreal,
-        _ => return Err("invalid or missing 'engine' (expected 'unity' or 'unreal')".to_string()),
+        Some("rust") => EngineKind::Rust,
+        _ => {
+            return Err(
+                "invalid or missing 'engine' (expected 'unity', 'unreal', or 'rust')".to_string(),
+            );
+        }
     };
     let engine_version = args
         .get("engine_version")

@@ -16,6 +16,7 @@ use crate::InitError;
 
 const DEFAULT_UNITY_VERSION: &str = "2022.3.42f1";
 const DEFAULT_UNREAL_VERSION: &str = "5.4";
+const DEFAULT_RUST_VERSION: &str = "1.100.0";
 
 /// Options controlling `quest init`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,6 +104,7 @@ impl ProjectScaffolder {
             .unwrap_or_else(|| match opts.engine {
                 EngineKind::Unity => DEFAULT_UNITY_VERSION.to_string(),
                 EngineKind::Unreal => DEFAULT_UNREAL_VERSION.to_string(),
+                EngineKind::Rust => DEFAULT_RUST_VERSION.to_string(),
             });
 
         let cfg = QuestforgeConfig {
@@ -158,6 +160,13 @@ impl ProjectScaffolder {
                 files.push((
                     "Source/QuestForge/MainArenaActions.h".to_string(),
                     starter_unreal_actions_h(),
+                ));
+            }
+            EngineKind::Rust => {
+                files.push(("src/lib.rs".to_string(), starter_rust_lib_rs()));
+                files.push((
+                    "src/main_arena_actions.rs".to_string(),
+                    starter_rust_actions_rs(),
                 ));
             }
         }
@@ -288,6 +297,7 @@ fn managed_sync_files(cfg: &QuestforgeConfig, specs: &[XrSceneSpec]) -> Vec<(Str
             .unwrap_or_else(|| match cfg.project.engine {
                 EngineKind::Unity => DEFAULT_UNITY_VERSION.to_string(),
                 EngineKind::Unreal => DEFAULT_UNREAL_VERSION.to_string(),
+                EngineKind::Rust => DEFAULT_RUST_VERSION.to_string(),
             });
 
     let mut files = match cfg.project.engine {
@@ -331,6 +341,24 @@ fn managed_sync_files(cfg: &QuestforgeConfig, specs: &[XrSceneSpec]) -> Vec<(Str
                 generate_unreal_bootstrap_h(cfg),
             ),
         ],
+        EngineKind::Rust => vec![
+            (
+                "rust-toolchain.toml".to_string(),
+                generate_rust_toolchain_toml(&engine_ver),
+            ),
+            (
+                "Cargo.toml".to_string(),
+                generate_rust_cargo_toml(cfg, &engine_ver),
+            ),
+            (
+                "AndroidManifest.xml".to_string(),
+                generate_android_manifest_xml(cfg),
+            ),
+            (
+                "src/questforge_bootstrap_gen.rs".to_string(),
+                generate_rust_bootstrap_rs(cfg),
+            ),
+        ],
     };
 
     for spec in specs {
@@ -345,6 +373,13 @@ fn managed_sync_files(cfg: &QuestforgeConfig, specs: &[XrSceneSpec]) -> Vec<(Str
                 files.push((
                     format!("Source/QuestForge/{}XrScene.gen.h", spec.scene),
                     generate_unreal_scene_h(spec),
+                ));
+            }
+            EngineKind::Rust => {
+                let snake = pascal_to_snake(&spec.scene);
+                files.push((
+                    format!("src/{snake}_xr_scene_gen.rs"),
+                    generate_rust_scene_rs(spec),
                 ));
             }
         }
@@ -397,6 +432,7 @@ fn check_source_vrc(project_dir: &Path, cfg: &QuestforgeConfig) -> SourceFinding
     let manifest_rel = match cfg.project.engine {
         EngineKind::Unity => "Assets/Plugins/Android/AndroidManifest.xml",
         EngineKind::Unreal => "Build/Android/AndroidManifest.xml",
+        EngineKind::Rust => "AndroidManifest.xml",
     };
     let manifest_path = project_dir.join(manifest_rel);
     let Ok(xml) = fs::read_to_string(&manifest_path) else {
@@ -477,7 +513,9 @@ fn check_xr_perf_patterns(project_dir: &Path) -> SourceFinding {
         };
         let in_frame_loop = content.contains("void Update(")
             || content.contains("void LateUpdate(")
-            || content.contains("TickComponent(");
+            || content.contains("TickComponent(")
+            || content.contains("fn step_frame(")
+            || content.contains("fn render_frame(");
         if !in_frame_loop {
             continue;
         }
@@ -487,6 +525,7 @@ fn check_xr_perf_patterns(project_dir: &Path) -> SourceFinding {
             "FindObjectsOfType",
             "GameObject.Find(",
             "Resources.Load(",
+            "thread::sleep(",
         ] {
             if content.contains(pattern) {
                 let rel = file.strip_prefix(project_dir).unwrap_or(&file);
@@ -531,7 +570,7 @@ fn collect_source_files(dir: &Path, out: &mut Vec<PathBuf>) {
             collect_source_files(&path, out);
         } else if matches!(
             path.extension().and_then(|e| e.to_str()),
-            Some("cs" | "cpp" | "h")
+            Some("cs" | "cpp" | "h" | "rs")
         ) {
             out.push(path);
         }
@@ -624,6 +663,13 @@ Saved/
 *.aab
 *.sln
 *.VC.db
+"
+        .to_string(),
+        EngineKind::Rust => "\
+target/
+dist/
+*.apk
+*.aab
 "
         .to_string(),
     }
@@ -922,6 +968,122 @@ namespace QuestForgeApp
     .to_string()
 }
 
+fn pascal_to_snake(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    for (idx, ch) in name.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if idx > 0 {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn generate_rust_toolchain_toml(rust_ver: &str) -> String {
+    format!(
+        "[toolchain]\nchannel = \"{rust_ver}\"\ncomponents = [\"rustfmt\", \"clippy\"]\ntargets = [\"aarch64-linux-android\"]\n"
+    )
+}
+
+fn generate_rust_cargo_toml(cfg: &QuestforgeConfig, rust_ver: &str) -> String {
+    let crate_name = cfg
+        .project
+        .name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    format!(
+        "# AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml.\n[package]\nname = \"{crate_name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nrust-version = \"{rust_ver}\"\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\npath = \"src/lib.rs\"\n\n[dependencies]\nopenxr = \"0.19\"\n"
+    )
+}
+
+fn generate_rust_bootstrap_rs(cfg: &QuestforgeConfig) -> String {
+    let hands_enabled = cfg.xr_features.input_modes.contains(&InputMode::Hands);
+    let controllers_enabled = cfg
+        .xr_features
+        .input_modes
+        .contains(&InputMode::Controllers);
+    let fov = foveation_label(cfg.xr_features.foveated_rendering);
+    format!(
+        "//! AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\n\n/// Target headset refresh rate in Hz.\npub const TARGET_REFRESH_RATE_HZ: u32 = {hz};\n/// True if Mixed Reality passthrough is enabled.\npub const PASSTHROUGH_ENABLED: bool = {passthrough};\n/// True if persistent spatial anchors are enabled.\npub const SPATIAL_ANCHORS_ENABLED: bool = {anchors};\n/// True if optical hand tracking is enabled.\npub const HAND_TRACKING_ENABLED: bool = {hands};\n/// True if Touch controllers are enabled.\npub const CONTROLLERS_ENABLED: bool = {controllers};\n/// Foveated rendering level.\npub const FOVEATION_LEVEL: &str = \"{fov}\";\n",
+        hz = cfg.xr_features.refresh_rate_hz,
+        passthrough = cfg.xr_features.passthrough,
+        anchors = cfg.xr_features.spatial_anchors,
+        hands = hands_enabled,
+        controllers = controllers_enabled,
+    )
+}
+
+fn generate_rust_scene_rs(spec: &XrSceneSpec) -> String {
+    let scene = &spec.scene;
+    let loco = locomotion_label(spec.locomotion.mode);
+    let snap = spec.locomotion.snap_turn_deg;
+    let handlers = collect_scene_handlers(spec);
+
+    let mut trait_methods = String::new();
+    let mut match_arms = String::new();
+    for (id, method) in &handlers {
+        let fn_name = pascal_to_snake(method);
+        trait_methods.push_str(&format!(
+            "    /// Invoked when `{id}` is activated.\n    fn {fn_name}(&mut self);\n"
+        ));
+        match_arms.push_str(&format!(
+            "            \"{id}\" => {{\n                handler.{fn_name}();\n                true\n            }}\n"
+        ));
+    }
+
+    format!(
+        "//! AUTO-GENERATED BY `quest sync` FROM specs/*_xr.yaml. DO NOT EDIT BY HAND.\n\n/// Strongly-typed action callbacks for the `{scene}` XR scene.\npub trait {scene}XrActions {{\n{trait_methods}}}\n\n/// Generated descriptor and action dispatcher for `{scene}`.\n#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\npub struct {scene}XrScene;\n\nimpl {scene}XrScene {{\n    /// Canonical scene name.\n    pub const SCENE_NAME: &'static str = \"{scene}\";\n    /// Configured locomotion mode.\n    pub const LOCOMOTION_MODE: &'static str = \"{loco}\";\n    /// Snap-turn angle in degrees.\n    pub const SNAP_TURN_DEGREES: u32 = {snap};\n\n    /// Dispatches an interaction or spatial UI action ID to `handler`.\n    pub fn dispatch_action<H: {scene}XrActions>(action_id: &str, handler: &mut H) -> bool {{\n        match action_id {{\n{match_arms}            _ => false,\n        }}\n    }}\n}}\n"
+    )
+}
+
+fn starter_rust_lib_rs() -> String {
+    r#"//! Native Rust OpenXR application crate scaffolded by QuestForge.
+
+pub mod main_arena_actions;
+pub mod main_arena_xr_scene_gen;
+pub mod questforge_bootstrap_gen;
+"#
+    .to_string()
+}
+
+fn starter_rust_actions_rs() -> String {
+    r#"//! Developer-owned action handlers for the `MainArena` XR scene.
+
+use crate::main_arena_xr_scene_gen::MainArenaXrActions;
+
+/// Runtime state and callback handler for `MainArena`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MainArenaHandler {
+    /// Count of energy core grabs.
+    pub grabs: u32,
+}
+
+impl MainArenaXrActions for MainArenaHandler {
+    fn on_energy_core_grabbed(&mut self) {
+        self.grabs += 1;
+    }
+
+    fn on_start_button_poked(&mut self) {}
+
+    fn on_reset_arena(&mut self) {
+        self.grabs = 0;
+    }
+}
+"#
+    .to_string()
+}
+
 fn unity_build_script_cs() -> String {
     r#"using System;
 using System.Linq;
@@ -1016,6 +1178,7 @@ fn readme_md(name: &str, engine: EngineKind) -> String {
     let engine_label = match engine {
         EngineKind::Unity => "Unity",
         EngineKind::Unreal => "Unreal Engine",
+        EngineKind::Rust => "Native Rust OpenXR",
     };
     format!(
         "\

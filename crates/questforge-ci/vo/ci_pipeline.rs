@@ -344,6 +344,18 @@ fn build_command_for(
                 format!("-archivedirectory={}", apk_path.display()),
             ]
         }
+        EngineKind::Rust => {
+            let cargo_bin = env.env_var("CARGO").unwrap_or_else(|| "cargo".to_string());
+            vec![
+                cargo_bin,
+                "build".to_string(),
+                "--release".to_string(),
+                "--target".to_string(),
+                "aarch64-linux-android".to_string(),
+                "--manifest-path".to_string(),
+                project_dir.join("Cargo.toml").display().to_string(),
+            ]
+        }
     }
 }
 

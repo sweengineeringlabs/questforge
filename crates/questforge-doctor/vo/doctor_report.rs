@@ -327,6 +327,27 @@ fn check_engine_installation(
                 },
             }
         }
+        EngineKind::Rust => {
+            let ver = cfg.project.engine_version.as_deref().unwrap_or("1.100.0");
+            match env.run_cmd("rustc", &["--version"], _project_dir) {
+                Some(out) if out.success => CheckResult {
+                    id: "QD-002".to_string(),
+                    name: "Game Engine".to_string(),
+                    status: CheckStatus::Pass,
+                    details: format!("Native Rust OpenXR toolchain active ({})", out.stdout.trim()),
+                    remediation: None,
+                },
+                _ => CheckResult {
+                    id: "QD-002".to_string(),
+                    name: "Game Engine".to_string(),
+                    status: CheckStatus::Fail,
+                    details: format!("Rust {ver} toolchain (rustc) not found"),
+                    remediation: Some(format!(
+                        "Install Rust {ver} and target: rustup toolchain install {ver} && rustup target add aarch64-linux-android"
+                    )),
+                },
+            }
+        }
     }
 }
 
@@ -458,6 +479,28 @@ fn check_android_ndk(cfg: Option<&QuestforgeConfig>, env: &DoctorEnv) -> CheckRe
 }
 
 fn check_xr_sdk(project_dir: &Path, cfg: Option<&QuestforgeConfig>) -> CheckResult {
+    if cfg.is_some_and(|c| c.project.engine == EngineKind::Rust) {
+        let cargo_toml = project_dir.join("Cargo.toml");
+        if let Ok(raw) = fs::read_to_string(&cargo_toml) {
+            if raw.contains("openxr") {
+                return CheckResult {
+                    id: "QD-006".to_string(),
+                    name: "Meta XR & OpenXR SDK".to_string(),
+                    status: CheckStatus::Pass,
+                    details: "Native Rust `openxr` crate configured in Cargo.toml".to_string(),
+                    remediation: None,
+                };
+            }
+        }
+        return CheckResult {
+            id: "QD-006".to_string(),
+            name: "Meta XR & OpenXR SDK".to_string(),
+            status: CheckStatus::Fail,
+            details: "missing `openxr` dependency in Cargo.toml".to_string(),
+            remediation: Some("Run `quest sync` to add `openxr` to Cargo.toml".to_string()),
+        };
+    }
+
     let manifest_path = project_dir.join("Packages").join("manifest.json");
     if !manifest_path.exists() {
         return CheckResult {

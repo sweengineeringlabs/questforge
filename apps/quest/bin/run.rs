@@ -129,6 +129,7 @@ struct CheckArgs {
 enum CliEngine {
     Unity,
     Unreal,
+    Rust,
 }
 
 impl From<CliEngine> for EngineKind {
@@ -136,6 +137,7 @@ impl From<CliEngine> for EngineKind {
         match value {
             CliEngine::Unity => Self::Unity,
             CliEngine::Unreal => Self::Unreal,
+            CliEngine::Rust => Self::Rust,
         }
     }
 }
