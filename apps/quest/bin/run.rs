@@ -838,53 +838,26 @@ fn run_agent(args: AgentArgs) -> ExitCode {
     };
 
     if let Some(prompt) = args.prompt {
-        let mut api_key = std::env::var(&args.api_key_env)
-            .ok()
-            .filter(|k| !k.trim().is_empty())
-            .or_else(|| {
-                std::env::var("GEMINI_API_KEY")
-                    .ok()
-                    .filter(|k| !k.trim().is_empty())
-            })
-            .or_else(|| {
-                std::env::var("GOOGLE_API_KEY")
-                    .ok()
-                    .filter(|k| !k.trim().is_empty())
-            })
-            .unwrap_or_default();
-
-        let mut using_gcloud_gemini = false;
-        if api_key.is_empty()
-            && args.llm_url.is_none()
-            && std::env::var("QUESTFORGE_LLM_URL").is_err()
-        {
-            if let Some(discovered) = discover_gemini_key_via_gcloud() {
-                api_key = discovered;
-                using_gcloud_gemini = true;
-            }
-        }
+        let explicit_key = non_empty_env(&args.api_key_env);
+        let (default_url, default_model, discovered_key) = if explicit_key.is_some() {
+            (
+                "https://api.openai.com/v1/chat/completions".to_string(),
+                "gpt-4o-mini".to_string(),
+                None,
+            )
+        } else {
+            resolve_llm_credentials()
+        };
+        let api_key = explicit_key.or(discovered_key).unwrap_or_default();
 
         let llm_url = args
             .llm_url
-            .or_else(|| std::env::var("QUESTFORGE_LLM_URL").ok())
-            .unwrap_or_else(|| {
-                if using_gcloud_gemini {
-                    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-                        .to_string()
-                } else {
-                    "https://api.openai.com/v1/chat/completions".to_string()
-                }
-            });
+            .or_else(|| non_empty_env("QUESTFORGE_LLM_URL"))
+            .unwrap_or(default_url);
         let model = args
             .model
-            .or_else(|| std::env::var("QUESTFORGE_LLM_MODEL").ok())
-            .unwrap_or_else(|| {
-                if using_gcloud_gemini {
-                    "gemini-flash-lite-latest".to_string()
-                } else {
-                    "gpt-4o-mini".to_string()
-                }
-            });
+            .or_else(|| non_empty_env("QUESTFORGE_LLM_MODEL"))
+            .unwrap_or(default_model);
         let llm_opts = LlmAgentOptions {
             project_dir: args.project_dir,
             prompt,
@@ -966,6 +939,54 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn resolve_llm_credentials() -> (String, String, Option<String>) {
+    // 1. Gemini: gcloud OAuth -> GEMINI_API_KEY / GOOGLE_API_KEY fallback
+    if let Some(key) = discover_gemini_key_via_gcloud() {
+        return (
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
+            "gemini-flash-lite-latest".to_string(),
+            Some(key),
+        );
+    }
+    if let Some(key) = non_empty_env("GEMINI_API_KEY").or_else(|| non_empty_env("GOOGLE_API_KEY")) {
+        return (
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
+            "gemini-flash-lite-latest".to_string(),
+            Some(key),
+        );
+    }
+    // 2. OpenAI: OAuth token -> OPENAI_API_KEY fallback
+    if let Some(key) =
+        non_empty_env("OPENAI_OAUTH_TOKEN").or_else(|| non_empty_env("OPENAI_API_KEY"))
+    {
+        return (
+            "https://api.openai.com/v1/chat/completions".to_string(),
+            "gpt-4o-mini".to_string(),
+            Some(key),
+        );
+    }
+    // 3. Anthropic: OAuth token -> ANTHROPIC_API_KEY fallback
+    if let Some(key) =
+        non_empty_env("ANTHROPIC_OAUTH_TOKEN").or_else(|| non_empty_env("ANTHROPIC_API_KEY"))
+    {
+        return (
+            "https://api.anthropic.com/v1/chat/completions".to_string(),
+            "claude-3-5-sonnet-latest".to_string(),
+            Some(key),
+        );
+    }
+    // 4. Default fallback
+    (
+        "https://api.openai.com/v1/chat/completions".to_string(),
+        "gpt-4o-mini".to_string(),
+        None,
+    )
+}
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
 fn discover_gemini_key_via_gcloud() -> Option<String> {
