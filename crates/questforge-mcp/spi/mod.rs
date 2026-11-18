@@ -23,6 +23,15 @@ impl AutoLlmCredentialResolver {
         [&GeminiProvider, &OpenAiProvider, &AnthropicProvider]
     }
 
+    /// Looks up a built-in [`LlmProviderSpi`] by canonical identifier (`gemini`, `openai`, `anthropic`).
+    #[must_use]
+    pub fn provider_for_id(id: &str) -> Option<&'static dyn LlmProviderSpi> {
+        let lower = id.trim().to_ascii_lowercase();
+        Self::built_in_providers()
+            .into_iter()
+            .find(|p| p.provider_id() == lower)
+    }
+
     /// Infers the matching built-in [`LlmProviderSpi`] from an endpoint URL.
     #[must_use]
     pub fn provider_for_url(url: &str) -> &'static dyn LlmProviderSpi {

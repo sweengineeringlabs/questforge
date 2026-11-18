@@ -299,6 +299,9 @@ struct AgentArgs {
     /// Optional natural-language prompt to run in LLM ReAct mode via `quest mcp`
     #[arg(long)]
     prompt: Option<String>,
+    /// LLM provider SPI (`gemini`, `openai`, `anthropic`; auto-detected when omitted)
+    #[arg(long)]
+    provider: Option<String>,
     /// OpenAI-compatible chat completions URL (or QUESTFORGE_LLM_URL env var)
     #[arg(long)]
     llm_url: Option<String>,
@@ -844,8 +847,22 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         let explicit_key = std::env::var(&args.api_key_env)
             .ok()
             .filter(|k| !k.trim().is_empty());
+        let explicit_provider = if let Some(ref name) = args.provider {
+            let Some(p) = AutoLlmCredentialResolver::provider_for_id(name) else {
+                eprintln!(
+                    "quest agent failed: unknown --provider '{name}' (expected: gemini, openai, anthropic)"
+                );
+                return ExitCode::FAILURE;
+            };
+            Some(p)
+        } else {
+            None
+        };
+
         let resolved = if explicit_key.is_some() {
             None
+        } else if let Some(p) = explicit_provider {
+            p.resolve_credentials().map(|cfg| (p, cfg))
         } else {
             AutoLlmCredentialResolver::resolve_first_with_provider()
         };
@@ -871,10 +888,13 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             })
             .or_else(|| resolved.as_ref().map(|(_, r)| r.default_model.clone()))
             .unwrap_or_else(|| "gpt-4o-mini".to_string());
-        let provider = resolved
-            .as_ref()
-            .filter(|(_, r)| r.endpoint_url == llm_url)
-            .map(|(p, _)| *p)
+        let provider = explicit_provider
+            .or_else(|| {
+                resolved
+                    .as_ref()
+                    .filter(|(_, r)| r.endpoint_url == llm_url)
+                    .map(|(p, _)| *p)
+            })
             .unwrap_or_else(|| AutoLlmCredentialResolver::provider_for_url(&llm_url));
         let auth_source = resolved
             .as_ref()
