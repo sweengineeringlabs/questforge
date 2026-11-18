@@ -19,7 +19,7 @@ struct Cli {
 enum Commands {
     /// Install and verify Quest toolchain binaries (adb, cmdline-tools, ovr-platform-util)
     Setup,
-    /// Validate developer workstation or CI environment against questforge.yaml
+    /// Validate developer workstation or CI environment against quest_forge.yaml
     Doctor,
     /// Scaffold a Quest-ready Unity or Unreal repository
     Init,

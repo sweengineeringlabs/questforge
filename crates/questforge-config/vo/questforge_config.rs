@@ -1,4 +1,4 @@
-//! Typed `questforge.yaml` manifest model, defaults, validation, and engine auto-detection.
+//! Typed `quest_forge.yaml` manifest model, defaults, validation, and engine auto-detection.
 
 use std::fs;
 use std::path::Path;
@@ -18,7 +18,7 @@ const DEFAULT_ADB: &str = "35.0.2";
 const DEFAULT_KEYSTORE_ENV: &str = "QUEST_KEYSTORE_PATH";
 const DEFAULT_ALIAS_ENV: &str = "QUEST_KEY_ALIAS";
 
-/// Root `questforge.yaml` manifest.
+/// Root `quest_forge.yaml` manifest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestforgeConfig {
     /// Manifest schema version (currently `"1"`).
@@ -190,16 +190,16 @@ impl Default for SigningConfig {
 }
 
 impl QuestforgeConfig {
-    /// Parses and validates a `questforge.yaml` string.
+    /// Parses and validates a `quest_forge.yaml` string.
     pub fn from_yaml_str(yaml: &str) -> Result<Self, ConfigError> {
         let cfg: Self = serde_yaml::from_str(yaml)?;
         cfg.validate()?;
         Ok(cfg)
     }
 
-    /// Loads `questforge.yaml` from `project_dir`, applying engine-version auto-detection if omitted.
+    /// Loads `quest_forge.yaml` from `project_dir`, applying engine-version auto-detection if omitted.
     pub fn load_from_dir(project_dir: &Path) -> Result<Self, ConfigError> {
-        let manifest_path = project_dir.join("questforge.yaml");
+        let manifest_path = project_dir.join("quest_forge.yaml");
         let raw = fs::read_to_string(&manifest_path).map_err(|source| ConfigError::Io {
             path: manifest_path,
             source,

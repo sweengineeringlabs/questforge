@@ -1,6 +1,6 @@
 //! # questforge-config
 //!
-//! Shared `questforge.yaml` manifest schema, validation, and engine auto-detection.
+//! Shared `quest_forge.yaml` manifest schema, validation, and engine auto-detection.
 //!
 //! ```compile_fail
 //! use questforge_config::error::ConfigError;

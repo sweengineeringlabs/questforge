@@ -80,7 +80,7 @@ fn test_load_from_dir_autodetects_unity_version_edge() {
     )
     .is_ok());
     assert!(fs::write(
-        dir.path().join("questforge.yaml"),
+        dir.path().join("quest_forge.yaml"),
         "version: \"1\"\nproject:\n  name: unity-auto\n  package_id: com.acme.unity\n  engine: unity\n",
     )
     .is_ok());
@@ -103,7 +103,7 @@ fn test_load_from_dir_autodetects_unreal_version_edge() {
     )
     .is_ok());
     assert!(fs::write(
-        dir.path().join("questforge.yaml"),
+        dir.path().join("quest_forge.yaml"),
         "version: \"1\"\nproject:\n  name: unreal-auto\n  package_id: com.acme.unreal\n  engine: unreal\n",
     )
     .is_ok());

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-/// Errors produced when loading or validating `questforge.yaml`.
+/// Errors produced when loading or validating `quest_forge.yaml`.
 #[derive(Debug, Error)]
 pub enum ConfigError {
     /// Failed to read manifest or engine project file.
@@ -17,7 +17,7 @@ pub enum ConfigError {
     },
 
     /// YAML syntax or type deserialization error.
-    #[error("invalid questforge.yaml syntax: {0}")]
+    #[error("invalid quest_forge.yaml syntax: {0}")]
     YamlParse(#[from] serde_yaml::Error),
 
     /// Unsupported manifest schema version.
@@ -30,7 +30,7 @@ pub enum ConfigError {
     /// Field-level validation error.
     #[error("validation failed for '{field}': {message}")]
     Validation {
-        /// Dotted field path in `questforge.yaml`.
+        /// Dotted field path in `quest_forge.yaml`.
         field: &'static str,
         /// Explanation of the invalid value.
         message: String,

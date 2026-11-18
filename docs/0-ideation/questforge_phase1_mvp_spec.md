@@ -1,7 +1,7 @@
 # QuestForge — Phase 1 MVP Specification
 
 **Version:** 1.0 (Draft)  
-**Scope:** Phase 1 Foundation (`setup-metavr`, `quest-doctor`, `quest-init`, and shared `questforge.yaml`)  
+**Scope:** Phase 1 Foundation (`setup-metavr`, `quest-doctor`, `quest-init`, and shared `quest_forge.yaml`)  
 **Toolchain:** Rust `1.100.0`, Bun `1.4.2` (latest stable), `swartch` CLI (Architecture 4.0 auditor, scaffolder, and remediator)  
 **Status:** Actionable MVP Spec (Zero-Backend CLI + GitHub Action)
 
@@ -11,10 +11,10 @@
 
 ### Objectives
 Deliver immediate, zero-infrastructure value to Quest/Horizon OS developers and CI pipelines:
-1. **Standardized Project Manifest (`questforge.yaml`):** A single source of truth for required engine, Android toolchain, Meta XR SDK, and target Quest hardware.
+1. **Standardized Project Manifest (`quest_forge.yaml`):** A single source of truth for required engine, Android toolchain, Meta XR SDK, and target Quest hardware.
 2. **Repeatable Toolchain Setup (`setup-metavr`):** Install and pin Quest-essential CLI tools (`adb` / Android `platform-tools`, Android `cmdline-tools`, and `ovr-platform-util`) locally and in GitHub Actions.
-3. **Environment Pre-Flight (`quest-doctor`):** Validate a workstation or CI runner against `questforge.yaml` and output actionable remediation steps.
-4. **Standardized Scaffolding (`quest-init`):** Bootstrap a Quest-ready Unity or Unreal repository with `questforge.yaml`, `.gitignore`, governance files, and starter CI workflows.
+3. **Environment Pre-Flight (`quest-doctor`):** Validate a workstation or CI runner against `quest_forge.yaml` and output actionable remediation steps.
+4. **Standardized Scaffolding (`quest-init`):** Bootstrap a Quest-ready Unity or Unreal repository with `quest_forge.yaml`, `.gitignore`, governance files, and starter CI workflows.
 
 ### Explicit Non-Goals (Deferred to Phases 2–5)
 - No backend API gateway, Kubernetes, PostgreSQL, Redis, S3, or NATS.
@@ -36,9 +36,9 @@ Instead of maintaining three separate Rust release pipelines in Phase 1, ship:
 
 ---
 
-## 3. Shared Project Manifest (`questforge.yaml`)
+## 3. Shared Project Manifest (`quest_forge.yaml`)
 
-Every QuestForge-managed repository includes a `questforge.yaml` at the repo root. Both `quest doctor` and future `quest-ci` / `quest-verify` phases read this file.
+Every QuestForge-managed repository includes a `quest_forge.yaml` at the repo root. Both `quest doctor` and future `quest-ci` / `quest-verify` phases read this file.
 
 ```yaml
 version: "1"
@@ -91,7 +91,7 @@ signing:
 
 ### Functional Requirements
 - **Cross-Platform:** Linux (`x64`, `arm64`), Windows (`x64`), macOS (`x64`, `arm64`).
-- **Version Pinning:** Read versions from action inputs, CLI flags, or `questforge.yaml`.
+- **Version Pinning:** Read versions from action inputs, CLI flags, or `quest_forge.yaml`.
 - **Integrity:** Verify SHA-256 checksums for every downloaded archive before extraction.
 - **Caching:** Cache extracted binaries by `(os, arch, tool, version)` in `~/.questforge/cache/` locally and via `@actions/cache` in GitHub Actions.
 - **PATH & Outputs:** Prepend installed bin directory to `PATH` / `GITHUB_PATH` and emit `adb-path`, `ovr-platform-util-path`, and resolved versions.
@@ -100,8 +100,8 @@ signing:
 ```yaml
 inputs:
   config:
-    description: "Path to questforge.yaml (optional)"
-    default: "questforge.yaml"
+    description: "Path to quest_forge.yaml (optional)"
+    default: "quest_forge.yaml"
   adb-version:
     description: "Android platform-tools version"
     default: "35.0.2"
@@ -130,14 +130,14 @@ Detect missing, misconfigured, or version-mismatched dependencies *before* a dev
 
 | Check ID | Target | How It Validates | Pass / Warn / Fail | Remediation Guidance |
 |---|---|---|---|---|
-| `QD-001` | **Project Config** | Reads `questforge.yaml` + `ProjectSettings/ProjectVersion.txt` (Unity) or `*.uproject` (Unreal) | **Fail** if version mismatch between `questforge.yaml` and project files | Print exact version mismatch and command to sync |
+| `QD-001` | **Project Config** | Reads `quest_forge.yaml` + `ProjectSettings/ProjectVersion.txt` (Unity) or `*.uproject` (Unreal) | **Fail** if version mismatch between `quest_forge.yaml` and project files | Print exact version mismatch and command to sync |
 | `QD-002` | **Unity / Unreal Editor** | Checks OS-standard install paths (Unity Hub `editors.json` / `C:\Program Files\Unity\Hub\Editor\` / `/Applications/Unity/Hub/Editor/`) + **Android Build Support** + **IL2CPP** module | **Fail** if required engine version or Android module is missing | Print Unity Hub CLI command (`unity-hub -- --headless install ...`) |
 | `QD-003` | **JDK** | Checks `JAVA_HOME`, Unity embedded JDK, or `java -version` | **Fail** if missing or incompatible major version (e.g., < 11 or != 17) | Suggest setting `JAVA_HOME` or using Unity's embedded JDK |
 | `QD-004` | **Android SDK & Build Tools** | Checks `ANDROID_HOME` / `ANDROID_SDK_ROOT` + `platforms/android-<target_sdk>` + `build-tools/<ver>` | **Fail** if missing target platform or build-tools | Print `sdkmanager "platforms;android-32" "build-tools;34.0.0"` |
 | `QD-005` | **Android NDK** | Checks `ANDROID_NDK_HOME` or `$ANDROID_HOME/ndk/<ver>` | **Fail** if missing required NDK version | Print `sdkmanager "ndk;23.1.7779620"` |
-| `QD-006` | **Meta XR SDK & OpenXR** | Parses `Packages/manifest.json` (Unity) for `com.meta.xr.sdk.all` / `com.unity.xr.openxr` | **Fail** if missing; **Warn** if version < `questforge.yaml` | Print UPM package name and expected version |
+| `QD-006` | **Meta XR SDK & OpenXR** | Parses `Packages/manifest.json` (Unity) for `com.meta.xr.sdk.all` / `com.unity.xr.openxr` | **Fail** if missing; **Warn** if version < `quest_forge.yaml` | Print UPM package name and expected version |
 | `QD-007` | **ADB & Connected Headset** | Runs `adb version` and `adb devices` | **Warn** if no device connected (not fatal in CI); **Fail** if `adb` missing or device `unauthorized` | Prompt to enable Developer Mode & accept RSA USB debugging dialog on headset |
-| `QD-008` | **Signing Keystore** | Checks env var / path from `questforge.yaml` (`keytool -list`) | **Warn** in local dev; **Fail** with `--strict` / `--ci` flag | Explain how to generate/configure release keystore |
+| `QD-008` | **Signing Keystore** | Checks env var / path from `quest_forge.yaml` (`keytool -list`) | **Warn** in local dev; **Fail** with `--strict` / `--ci` flag | Explain how to generate/configure release keystore |
 | `QD-009` | **Swartch Architecture Gate** | Checks `swartch` availability, `config/vocabulary.toml` (or `vocabulary.toml`), and runs `swartch <crate-directory>` against Architecture 4.0 invariant rules | **Fail** on rule violations (`[<ERROR_CODE>] <rule_name>`); **Warn** if `swartch` is missing locally (**Fail** in `--ci`) | Run `swartch --fix --dry-run` to preview remediations or `swartch --rule <code > --help` for rule contract |
 
 ### CLI & Output Modes
@@ -160,7 +160,7 @@ quest init my-quest-app --engine unity --unity-version 2022.3.42f1 --package-id 
 ### Generated Repository Layout
 ```text
 my-quest-app/
-├── questforge.yaml
+├── quest_forge.yaml
 ├── config/
 │   └── vocabulary.toml         # Swartch Architecture 4.0 vocabulary file
 ├── scripts/                    # Environment & CI lifecycle scripts (`ci.sh` via `swartch scaffold --scripts`)
@@ -189,7 +189,7 @@ my-quest-app/
 ## 7. Phase 1 Exit Criteria (Definition of Done)
 
 Phase 1 is complete when a new developer or CI runner can:
-1. Run `quest init my-app` to generate a valid repository with `questforge.yaml`.
+1. Run `quest init my-app` to generate a valid repository with `quest_forge.yaml`.
 2. Run `quest doctor` locally on Windows and macOS and receive accurate pass/fail checks with working remediation commands.
 3. Run `setup-metavr` in a Linux/Windows GitHub Actions workflow to install pinned `adb` and `cmdline-tools` with caching and SHA-256 verification.
 4. Run `quest doctor --ci --json` in GitHub Actions and fail fast on toolchain drift.
