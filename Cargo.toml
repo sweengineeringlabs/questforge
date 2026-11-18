@@ -10,6 +10,7 @@ members = [
     "crates/questforge-init",
     "crates/questforge-mcp",
     "crates/questforge-ops",
+    "crates/questforge-server",
     "apps/quest",
 ]
 
@@ -37,6 +38,7 @@ questforge-doctor    = { path = "crates/questforge-doctor" }
 questforge-init      = { path = "crates/questforge-init" }
 questforge-mcp       = { path = "crates/questforge-mcp" }
 questforge-ops       = { path = "crates/questforge-ops" }
+questforge-server    = { path = "crates/questforge-server" }
 
 clap       = { version = "4.5", features = ["derive"] }
 hex        = "0.4"

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["tooling/**/*.ts", "src/shared/browser-sdk/**/*.ts", "**/*_test.gen.ts", "**/*.test.ts", "**/*.spec.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,28 @@
+[package]
+name = "questforge-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[package.metadata.arch]
+package_kind = "lib"
+domain = "questforge"
+
+[dependencies]
+questforge-api.workspace = true
+questforge-ops.workspace = true
+questforge-verify.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

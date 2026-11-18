@@ -533,6 +533,7 @@ dependencies = [
  "questforge-init",
  "questforge-mcp",
  "questforge-ops",
+ "questforge-server",
  "questforge-toolchain",
  "questforge-verify",
  "serde_json",
@@ -616,6 +617,19 @@ name = "questforge-ops"
 version = "0.1.0"
 dependencies = [
  "questforge-api",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "questforge-server"
+version = "0.1.0"
+dependencies = [
+ "questforge-api",
+ "questforge-ops",
+ "questforge-verify",
  "serde",
  "serde_json",
  "tempfile",

@@ -1,0 +1,136 @@
+{
+  "artifacts": [
+    {
+      "kind": "dom-address-map",
+      "path": "public/dom-address-map.json",
+      "schema": "justweb.dom-address-map/1",
+      "sha256": "3e7ac7234a125da8945407e4a0a2596976cf27db9f7aa0562719a89d4d0e93cb"
+    },
+    {
+      "kind": "dom-address-map-digest",
+      "path": "public/dom-address-map.json.sha256",
+      "schema": "justweb.dom-address-map-digest/1",
+      "sha256": "82935f8879b7e5c624d590803f0807cd7377bc62a5b51aef6e7edd4dcba01e47"
+    },
+    {
+      "kind": "registry",
+      "path": "src/component-registry.gen.ts",
+      "schema": "justweb.registry/1",
+      "sha256": "5dbcaf276e41d6ed53a77da11f716cbdafec0987509cb7d1e8919651e4b07dce"
+    },
+    {
+      "kind": "feature-api",
+      "path": "src/features/dashboard/dashboard_api.gen.ts",
+      "schema": "justweb.feature-api/1",
+      "sha256": "033ee001e585654a81c635274058b6058f491e0a7f97f0c055274e0bd3027978"
+    },
+    {
+      "kind": "feature-api",
+      "path": "src/features/dashboard/dashboard_api_mock.gen.ts",
+      "schema": "justweb.feature-api/1",
+      "sha256": "1baa87b452aa3aa93cf011e5cc16d03f7b120ef755abbea4dcfb7e5e2bc29d5a"
+    },
+    {
+      "kind": "component-test",
+      "path": "src/features/dashboard/dashboard_browser_test.gen.ts",
+      "schema": "justweb.component-test/1",
+      "sha256": "42a4b8a2c05f4cbc48ae7d4dfd802301deeb20f759199182625fae244b7b967d"
+    },
+    {
+      "kind": "component-style",
+      "path": "src/features/dashboard/dashboard_component.gen.css",
+      "schema": "justweb.component-style/1",
+      "sha256": "8f4b166e075eb1fef2336675df90e2f6b626c212174d69d403a134898af7e4ca"
+    },
+    {
+      "kind": "component-markup",
+      "path": "src/features/dashboard/dashboard_component.gen.html",
+      "schema": "justweb.component-markup/1",
+      "sha256": "0edbe4245fa7304a20aff1f131f40a1161824b95e5e664238c197ff377d279e4"
+    },
+    {
+      "kind": "component-source",
+      "path": "src/features/dashboard/dashboard_component.gen.ts",
+      "schema": "justweb.component-source/1",
+      "sha256": "ac648d6bdae1c47d69b62c490c5d3af8b8574b50dbac90072e48ca8dac741bd2"
+    },
+    {
+      "kind": "component-test",
+      "path": "src/features/dashboard/dashboard_e2e_test.gen.ts",
+      "schema": "justweb.component-test/1",
+      "sha256": "18e9d08b4456ed6f0ba62f249f963ed03ea09518525f57b64ff52f6f6a5fe8ca"
+    },
+    {
+      "kind": "component-test",
+      "path": "src/features/dashboard/dashboard_int_test.gen.ts",
+      "schema": "justweb.component-test/1",
+      "sha256": "1957c583be33bddc0a41f79dde0fdec0f79765427f13f021570cbfe31f62aa9f"
+    },
+    {
+      "kind": "component-mock",
+      "path": "src/features/dashboard/dashboard_mock.gen.ts",
+      "schema": "justweb.component-mock/1",
+      "sha256": "febaf60f5151b966b0c0c8b11cedc85db0dcb7f7b018130316a22bc397de78c9"
+    },
+    {
+      "kind": "feature-api",
+      "path": "src/features/dashboard/dashboard_types.gen.ts",
+      "schema": "justweb.feature-api/1",
+      "sha256": "9504de21e864d718bf591bead6ce89bbc67f4da1f191f0ddde47be04adf9b181"
+    },
+    {
+      "kind": "component-mock",
+      "path": "src/install_mocks.gen.ts",
+      "schema": "justweb.component-mock/1",
+      "sha256": "94e2e92d3ed8863150735c4df6f6b1b08c9e4286d4e47368a34ce0ea83d35c36"
+    },
+    {
+      "kind": "registry",
+      "path": "src/registry.gen.ts",
+      "schema": "justweb.registry/1",
+      "sha256": "061afc8a0b91b9aabcdb499681c94262ef5595e7dc3684d603136ed68218d451"
+    }
+  ],
+  "canonicalization": {
+    "digest": "sha256, lowercase hex",
+    "digestInput": "the artifact's bytes exactly as mweb wrote them (LF, no normalization); never a bundled or transformed form",
+    "ordering": "artifacts sorted by path, ascending byte order",
+    "pathForm": "project-root-relative, '/'-separated, no leading '/', no '..'",
+    "verification": "build-time only; a browser runtime must not recompute digests from bundled output"
+  },
+  "format": "justweb-artifact-manifest",
+  "formatVersion": 1,
+  "generator": {
+    "artifactSchemas": {
+      "component-markup": "justweb.component-markup/1",
+      "component-mock": "justweb.component-mock/1",
+      "component-source": "justweb.component-source/1",
+      "component-style": "justweb.component-style/1",
+      "component-test": "justweb.component-test/1",
+      "dom-address-map": "justweb.dom-address-map/1",
+      "dom-address-map-digest": "justweb.dom-address-map-digest/1",
+      "feature-api": "justweb.feature-api/1",
+      "mounts": "justweb.mounts/1",
+      "other": "justweb.other/1",
+      "registry": "justweb.registry/1",
+      "routes": "justweb.routes/1",
+      "service-worker": "justweb.service-worker/1"
+    },
+    "name": "mweb",
+    "revision": "d12f9888fb05e28490239aa4ed8b8299356cb4a7",
+    "sourceDirty": true,
+    "version": "0.10.0"
+  },
+  "provenance": {
+    "authenticated": false,
+    "guarantees": "consistency of the artifact set",
+    "kind": "self-declared",
+    "note": "hashes and version fields detect missing, stale, mixed or modified artifacts; they do not prove which generator produced the files"
+  },
+  "scope": {
+    "roots": [
+      "public",
+      "src"
+    ]
+  }
+}

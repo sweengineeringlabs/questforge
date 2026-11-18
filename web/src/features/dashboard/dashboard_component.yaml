@@ -1,0 +1,191 @@
+# justweb component schema — dashboard
+# Docs: https://justscript.dev/schema
+# Generate: mweb generate component dashboard
+$schema: ../../framework/main/features/justweb/schema/web.schema.json
+name: dashboard
+version: 1
+description: Dashboard component.
+
+# ── Styles ────────────────────────────────────────────────────────
+styles:
+  # layer: components          # Optional CSS cascade layer
+  breakpoints:
+    mobile: 0
+    desktop: 1024
+    narrow: 240
+    wide: 640
+  base:
+    properties:
+      display: flex
+      flex-direction: column
+      gap: var(--spacing-md)
+      padding: var(--spacing-lg)
+      border-radius: var(--radius-md)
+      font-family: var(--font-family)
+
+  variants:
+    primary:
+      properties:
+        background: var(--color-primary)
+        color: var(--color-on-primary)
+    secondary:
+      properties:
+        background: var(--color-secondary)
+        color: var(--color-on-secondary)
+    ghost:
+      properties:
+        background: transparent
+        border: 1px solid var(--color-border)
+
+  sizes:
+    sm:
+      properties:
+        padding: var(--spacing-sm)
+        font-size: 0.875rem
+    md:
+      properties:
+        padding: var(--spacing-md)
+        font-size: 1rem
+    lg:
+      properties:
+        padding: var(--spacing-lg)
+        font-size: 1.125rem
+
+  states:
+    disabled:
+      opacity: "0.5"
+      pointer-events: none
+      cursor: not-allowed
+    hover:
+      filter: brightness(1.1)
+    focus:
+      outline: 2px solid var(--color-focus)
+      outline-offset: 2px
+    active:
+      transform: scale(0.98)
+
+  parts:
+    label:
+      base:
+        properties:
+          font-weight: 600
+          line-height: 1.4
+    input:
+      base:
+        properties:
+          border: 1px solid var(--color-border)
+          border-radius: var(--radius-sm)
+          padding: var(--spacing-sm)
+
+  compoundVariants:
+    - conditions:
+        variant: primary
+        size: sm
+      properties:
+        font-size: 0.75rem
+        letter-spacing: 0.05em
+
+  defaultVariants:
+    variant: primary
+    size: md
+
+  responsive:
+    mobile:
+      properties:
+        padding: var(--spacing-sm)
+    desktop:
+      properties:
+        padding: var(--spacing-lg)
+
+  container:
+    narrow:
+      properties:
+        flex-direction: column
+    wide:
+      properties:
+        flex-direction: row
+
+# ── DOM ───────────────────────────────────────────────────────────
+dom:
+  tag: div
+  aria:
+    role: region
+    label: Dashboard
+
+  elements:
+    label:
+      tag: span
+      address: true
+    input:
+      tag: input
+      inputType: number
+      required: true
+      placeholder: "0"
+      address: true
+      interactive: true
+      tabindex: 0
+    button:
+      tag: button
+      type: submit
+      address: true
+      interactive: true
+    link:
+      tag: a
+      href: "{{slot}}"
+      target: _blank
+      address: true
+    # popover:
+    #   tag: div
+    #   popover: auto
+    # popover-trigger:
+    #   tag: button
+    #   command: toggle-popover
+    #   commandfor: popover
+    # inert-panel:
+    #   tag: div
+    #   inert: true
+
+  slots:
+    - name: header
+      tag: div
+    - name: footer
+      tag: div
+      optional: true
+
+  events:
+    increment:
+      type: custom
+      description: Fired when the dashboard value increases.
+      bubbles: true
+      cancelable: false
+      payload:
+        value: number
+        previous: number
+    submit:
+      type: submit
+      description: Fired when the form is submitted.
+      bubbles: true
+      cancelable: true
+      payload:
+        data: any
+
+  states:
+    disabled:
+      aria: disabled
+      # data: state
+      # pseudo: ":disabled"
+
+  # builtinStates: false  # Opt out of the 7 built-in signal-backed states
+                          # (checked/completed/disabled/expanded/invalid/loading/selected)
+                          # for a component that doesn't need them; states: above still applies
+
+  # template: |             # Optional inline HTML override
+  #   <div class="dashboard">
+  #     <slot name="header"></slot>
+  #     <span data-addr="label"></span>
+  #     <input data-addr="input" />
+  #     <button data-addr="button">Submit</button>
+  #     <slot name="footer"></slot>
+  #   </div>
+  # customElement:               # Override the registered tag (default: js-dashboard)
+  #   tagName: mweb-dashboard

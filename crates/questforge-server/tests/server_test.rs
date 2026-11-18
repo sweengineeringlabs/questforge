@@ -1,0 +1,79 @@
+//! Integration tests for `questforge-server`.
+
+use std::collections::BTreeMap;
+
+use questforge_server::{ControlPlaneServer, HttpRequest};
+
+fn make_req(method: &str, path: &str, role: Option<&str>, body: &str) -> HttpRequest {
+    let mut headers = BTreeMap::new();
+    if let Some(r) = role {
+        headers.insert("x-quest-role".to_string(), r.to_string());
+    }
+    HttpRequest {
+        method: method.to_string(),
+        path: path.to_string(),
+        headers,
+        body: body.to_string(),
+    }
+}
+
+#[test]
+fn test_server_projects_builds_verify_deployments_and_audit_happy() {
+    let server = ControlPlaneServer::default();
+
+    let health = server.handle_request(&make_req("GET", "/health", None, ""));
+    assert_eq!(health.status, 200);
+
+    let create_proj = server.handle_request(&make_req(
+        "POST",
+        "/api/projects",
+        Some("developer"),
+        r#"{"name":"vr-app","repository":"https://example.invalid/vr","owner":"xr-team"}"#,
+    ));
+    assert_eq!(create_proj.status, 201);
+
+    let create_build = server.handle_request(&make_req(
+        "POST",
+        "/api/builds",
+        Some("platform_engineer"),
+        r#"{"project_id":"proj-1","version":"1.0.0"}"#,
+    ));
+    assert_eq!(create_build.status, 201);
+
+    let create_dep = server.handle_request(&make_req(
+        "POST",
+        "/api/deployments",
+        Some("operations_engineer"),
+        r#"{"target":"qa-lab","apk_path":"dist/vr-app.apk"}"#,
+    ));
+    assert_eq!(create_dep.status, 201);
+
+    let metrics = server.handle_request(&make_req("GET", "/metrics", None, ""));
+    assert_eq!(metrics.status, 200);
+    assert!(String::from_utf8_lossy(&metrics.body).contains("questforge_projects_total 1"));
+
+    let audit = server.handle_request(&make_req("GET", "/api/audit", None, ""));
+    assert_eq!(audit.status, 200);
+    assert!(String::from_utf8_lossy(&audit.body).contains("/api/deployments"));
+}
+
+#[test]
+fn test_server_rbac_rejects_unauthorized_and_unauthenticated_error() {
+    let server = ControlPlaneServer::default();
+
+    let unauth = server.handle_request(&make_req(
+        "POST",
+        "/api/projects",
+        None,
+        r#"{"name":"unauth"}"#,
+    ));
+    assert_eq!(unauth.status, 401);
+
+    let forbidden = server.handle_request(&make_req(
+        "POST",
+        "/api/deployments",
+        Some("auditor"),
+        r#"{"target":"prod"}"#,
+    ));
+    assert_eq!(forbidden.status, 403);
+}

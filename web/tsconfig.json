@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": [],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@browser/*": ["./src/shared/browser-sdk/*"]
+    }
+  },
+  "include": ["src", "**/*.ts"],
+  "exclude": ["node_modules", "dist", "tooling", "src/shared/browser-sdk", "**/*_test.gen.ts", "**/*.test.ts", "**/*.spec.ts"]
+}

@@ -1,0 +1,121 @@
+@layer tokens, component, theme, override;
+
+@layer component {
+  .dashboard {
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-family);
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+  }
+
+  .dashboard {
+    font-size: 1rem;
+    padding: var(--spacing-md);
+  }
+
+  .dashboard {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  .dashboard--ghost {
+    background: transparent;
+    border: 1px solid var(--color-border);
+  }
+
+  .dashboard--primary {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  .dashboard--secondary {
+    background: var(--color-secondary);
+    color: var(--color-on-secondary);
+  }
+
+  .dashboard--lg {
+    font-size: 1.125rem;
+    padding: var(--spacing-lg);
+  }
+
+  .dashboard--md {
+    font-size: 1rem;
+    padding: var(--spacing-md);
+  }
+
+  .dashboard--sm {
+    font-size: 0.875rem;
+    padding: var(--spacing-sm);
+  }
+
+  .dashboard--sm.dashboard--primary {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  .dashboard--active {
+    transform: scale(0.98);
+  }
+
+  .dashboard--disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .dashboard--focus {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .dashboard--hover {
+    filter: brightness(1.1);
+  }
+
+  @media (min-width: 1024px) {
+    .dashboard {
+      padding: var(--spacing-lg);
+    }
+
+  }
+
+  @media (min-width: 0px) {
+    .dashboard {
+      padding: var(--spacing-sm);
+    }
+
+  }
+
+  [data-component="dashboard"] {
+    container-type: inline-size;
+  }
+
+  @container (min-width: 240px) {
+    .dashboard {
+      flex-direction: column;
+    }
+
+  }
+
+  @container (min-width: 640px) {
+    .dashboard {
+      flex-direction: row;
+    }
+
+  }
+
+  .dashboard__input {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm);
+  }
+
+  .dashboard__label {
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+}
+

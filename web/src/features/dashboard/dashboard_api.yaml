@@ -1,0 +1,38 @@
+# Feature API schema — run: mweb generate app
+# Generates: src/dashboard_types.gen.ts, src/dashboard_api.gen.ts, src/dashboard_mock.gen.ts
+feature: dashboard
+
+types:
+  DashboardData:
+    fields:
+      id: { type: string, required: true }
+      name: { type: string, required: true }
+      status: { type: string }
+
+api:
+  - method: GET
+    path: /dashboard
+    operation: listDashboard
+    returns: DashboardData[]
+
+  - method: GET
+    path: /dashboard/{{id}}
+    operation: getDashboard
+    returns: DashboardData
+
+  - method: POST
+    path: /dashboard
+    operation: createDashboard
+    returns: DashboardData
+
+mock:
+  /dashboard:
+    - id: "ID-001"
+      name: Sipho Mthembu
+      status: active
+    - id: "ID-001 2"
+      name: Sipho Mthembu 2
+      status: active 2
+    - id: "ID-001 3"
+      name: Sipho Mthembu 3
+      status: active 3

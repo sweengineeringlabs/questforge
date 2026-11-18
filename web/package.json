@@ -1,0 +1,17 @@
+{
+  "name": "web",
+  "private": true,
+  "scripts": {
+    "dev": "bun tooling/mweb.ts dev",
+    "build": "bun tooling/mweb.ts build",
+    "preview": "bun tooling/mweb.ts preview",
+    "typecheck": "bun tooling/mweb.ts typecheck",
+    "test": "bun tooling/mweb.ts test"
+  },
+  "dependencies": {
+    "@preact/signals-core": "^1.8.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

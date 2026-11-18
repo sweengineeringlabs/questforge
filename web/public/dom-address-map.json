@@ -1,0 +1,40 @@
+{
+  "app": "web",
+  "elements": {
+    "web:dashboard:dashboard:button": {
+      "component": "dashboard",
+      "feature": "dashboard",
+      "interactive": true,
+      "scope": "public",
+      "tag": "js-dashboard",
+      "type": "button"
+    },
+    "web:dashboard:dashboard:input": {
+      "component": "dashboard",
+      "feature": "dashboard",
+      "inputType": "number",
+      "interactive": true,
+      "scope": "public",
+      "tag": "js-dashboard",
+      "type": "input"
+    },
+    "web:dashboard:dashboard:label": {
+      "component": "dashboard",
+      "feature": "dashboard",
+      "interactive": false,
+      "scope": "public",
+      "tag": "js-dashboard",
+      "type": "span"
+    },
+    "web:dashboard:dashboard:link": {
+      "component": "dashboard",
+      "feature": "dashboard",
+      "interactive": false,
+      "scope": "public",
+      "tag": "js-dashboard",
+      "type": "a"
+    }
+  },
+  "schema": "1",
+  "version": "0.1.0"
+}

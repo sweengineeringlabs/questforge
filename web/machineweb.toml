@@ -1,0 +1,21 @@
+# machineweb.toml — project config for the mweb CLI.
+# See: docs/4-development/developer_guide.md#working-with-machinewebtoml
+
+name = "web"
+version = "0.1.0"
+description = ""
+
+[layout]
+preset = "by-feature"
+
+[generate]
+barrel = "starter"
+mock_runtime = "shared"
+emit_tests = true
+minify_css = false
+api_output = "colocated"
+css_output = "colocated"
+test_output = "colocated"
+emit_index_html = true
+emit_package_json = true
+emit_service_worker = false

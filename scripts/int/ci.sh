@@ -33,6 +33,7 @@ swartch --vocabulary config/vocabulary.toml \
     crates/questforge-init \
     crates/questforge-mcp \
     crates/questforge-ops \
+    crates/questforge-server \
     apps/quest
 
 # 2. Formatting & Lint Gate

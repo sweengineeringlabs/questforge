@@ -10,6 +10,7 @@ use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::QuestMcpServer;
 use questforge_ops::{FleetInventory, FleetManager, OpsEnv};
+use questforge_server::ControlPlaneServer;
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
 
@@ -40,6 +41,8 @@ enum Commands {
     Mcp(McpArgs),
     /// Manage Quest lab and device fleets (discover, deploy, rollback, telemetry, logcat, screenshot)
     Ops(OpsArgs),
+    /// Run the QuestForge hosted control plane HTTP server
+    Serve(ServeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -296,6 +299,16 @@ enum OpsAction {
     },
 }
 
+#[derive(Debug, Args)]
+struct ServeArgs {
+    /// Listen address (host:port)
+    #[arg(long, default_value = "127.0.0.1:8080")]
+    addr: String,
+    /// Optional directory serving machineweb (mweb) dashboard assets
+    #[arg(long)]
+    web_root: Option<PathBuf>,
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -312,6 +325,7 @@ impl Runner {
             Commands::Verify(args) => run_verify(args),
             Commands::Mcp(args) => run_mcp(args),
             Commands::Ops(args) => run_ops(args),
+            Commands::Serve(args) => run_serve(args),
         }
     }
 }
@@ -749,6 +763,18 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                     ExitCode::FAILURE
                 }
             }
+        }
+    }
+}
+
+fn run_serve(args: ServeArgs) -> ExitCode {
+    let server = ControlPlaneServer::new(args.web_root);
+    println!("QuestForge control plane listening on http://{}", args.addr);
+    match server.serve(&args.addr) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("quest serve failed: {err}");
+            ExitCode::FAILURE
         }
     }
 }
