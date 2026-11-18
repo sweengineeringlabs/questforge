@@ -1,9 +1,9 @@
 //! Value objects module.
 //!
 //! ```compile_fail
-//! use questforge_init::vo::crate_data::CrateData;
+//! use questforge_init::vo::init_plan::ProjectScaffolder;
 //! ```
 
-mod crate_data;
+mod init_plan;
 
-pub use self::crate_data::CrateData;
+pub use self::init_plan::{InitOptions, InitReport, ProjectScaffolder};

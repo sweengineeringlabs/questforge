@@ -570,6 +570,10 @@ name = "questforge-init"
 version = "0.1.0"
 dependencies = [
  "questforge-api",
+ "questforge-config",
+ "serde",
+ "serde_yaml",
+ "tempfile",
  "thiserror",
 ]
 
