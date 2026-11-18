@@ -325,7 +325,7 @@ struct AgentArgs {
     #[arg(long, value_enum)]
     goal: Option<CliAgentGoal>,
     /// Agent role profile (`studio`, `enterprise`, `platform`, `qa`, `developer`)
-    #[arg(long, alias = "audience", value_enum, default_value_t = CliAgentRole::Developer)]
+    #[arg(long, value_enum, default_value_t = CliAgentRole::Developer)]
     role: CliAgentRole,
     /// Optional natural-language prompt to run in LLM ReAct mode via `quest mcp`
     #[arg(long)]
