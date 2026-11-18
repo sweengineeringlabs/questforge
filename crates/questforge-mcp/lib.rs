@@ -7,6 +7,10 @@
 //! ```
 //!
 //! ```compile_fail
+//! use questforge_mcp::spi::GeminiProvider;
+//! ```
+//!
+//! ```compile_fail
 //! use questforge_mcp::traits::LlmProviderSpi;
 //! ```
 //!
@@ -17,14 +21,16 @@
 #![deny(unsafe_code)]
 
 mod error;
+mod spi;
 mod traits;
 mod vo;
 
 pub use self::error::McpError;
+pub use self::spi::{AnthropicProvider, AutoLlmCredentialResolver, GeminiProvider, OpenAiProvider};
 pub use self::traits::LlmProviderSpi;
 pub use self::vo::{
-    AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, AutoLlmCredentialResolver, JsonRpcError,
-    JsonRpcRequest, JsonRpcResponse, LlmAgentOptions, LlmChatMessage, LlmCredentialProvider,
-    LlmEndpointConfig, LlmHttpRequest, LlmRunReport, LlmToolInvocation, LlmToolSchema,
-    LlmTurnResponse, McpToolDefinition, QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, JsonRpcError, JsonRpcRequest,
+    JsonRpcResponse, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig, LlmHttpRequest,
+    LlmRunReport, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpToolDefinition,
+    QuestMcpServer, QuestXrAgent,
 };

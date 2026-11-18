@@ -9,8 +9,8 @@ use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmCredentialProvider, LlmEndpointConfig,
-    QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmEndpointConfig, QuestMcpServer,
+    QuestXrAgent,
 };
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
@@ -875,7 +875,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             .as_ref()
             .filter(|(_, r)| r.endpoint_url == llm_url)
             .map(|(p, _)| *p)
-            .unwrap_or_else(|| LlmCredentialProvider::from_url(&llm_url));
+            .unwrap_or_else(|| AutoLlmCredentialResolver::provider_for_url(&llm_url));
         let auth_source = resolved
             .as_ref()
             .map(|(_, r)| r.auth_source.clone())
@@ -898,7 +898,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             &args.project_dir,
             &prompt,
             args.max_turns,
-            &provider,
+            provider,
             &endpoint_cfg,
         ) {
             Ok(report) => {

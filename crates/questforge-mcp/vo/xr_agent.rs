@@ -7,10 +7,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::spi::AutoLlmCredentialResolver;
 use crate::traits::LlmProviderSpi;
-use crate::vo::llm_providers::{
-    LlmChatMessage, LlmCredentialProvider, LlmEndpointConfig, LlmToolSchema,
-};
+use crate::vo::llm_providers::{LlmChatMessage, LlmEndpointConfig, LlmToolSchema};
 use crate::vo::mcp_server::{JsonRpcRequest, JsonRpcResponse, QuestMcpServer};
 use crate::McpError;
 
@@ -139,7 +138,7 @@ impl QuestXrAgent {
         quest_bin: &Path,
         opts: &LlmAgentOptions,
     ) -> Result<LlmRunReport, McpError> {
-        let provider = LlmCredentialProvider::from_url(&opts.llm_url);
+        let provider = AutoLlmCredentialResolver::provider_for_url(&opts.llm_url);
         let auth_source = if opts.api_key.starts_with("sk-ant-oat") {
             "oauth".to_string()
         } else {
@@ -157,7 +156,7 @@ impl QuestXrAgent {
             &opts.project_dir,
             &opts.prompt,
             opts.max_turns,
-            &provider,
+            provider,
             &config,
         )
     }
@@ -214,8 +213,8 @@ impl QuestXrAgent {
     where
         F: FnMut(&Value) -> Result<Value, McpError>,
     {
-        let provider = LlmCredentialProvider::from_url(&opts.llm_url);
-        Self::run_llm_in_process_with_provider(opts, &provider, completer)
+        let provider = AutoLlmCredentialResolver::provider_for_url(&opts.llm_url);
+        Self::run_llm_in_process_with_provider(opts, provider, completer)
     }
 
     /// Runs the LLM ReAct loop in-process with an explicit [`LlmProviderSpi`] and callback.

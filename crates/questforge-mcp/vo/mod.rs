@@ -9,8 +9,8 @@ mod mcp_server;
 mod xr_agent;
 
 pub use self::llm_providers::{
-    AutoLlmCredentialResolver, LlmChatMessage, LlmCredentialProvider, LlmEndpointConfig,
-    LlmHttpRequest, LlmToolInvocation, LlmToolSchema, LlmTurnResponse,
+    LlmChatMessage, LlmEndpointConfig, LlmHttpRequest, LlmToolInvocation, LlmToolSchema,
+    LlmTurnResponse,
 };
 pub use self::mcp_server::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpToolDefinition, QuestMcpServer,

@@ -5,9 +5,10 @@ use std::fs;
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, AutoLlmCredentialResolver, JsonRpcRequest, LlmAgentOptions,
-    LlmChatMessage, LlmCredentialProvider, LlmEndpointConfig, LlmHttpRequest, LlmProviderSpi,
-    LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError, QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AnthropicProvider, AutoLlmCredentialResolver, GeminiProvider,
+    JsonRpcRequest, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig, LlmHttpRequest,
+    LlmProviderSpi, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError, OpenAiProvider,
+    QuestMcpServer, QuestXrAgent,
 };
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -228,13 +229,10 @@ fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
 
 #[test]
 fn test_llm_credential_provider_resolves_configured_providers_happy() {
-    assert_eq!(LlmCredentialProvider::Gemini.provider_id(), "gemini");
-    assert_eq!(LlmCredentialProvider::OpenAi.provider_id(), "openai");
-    assert_eq!(LlmCredentialProvider::Anthropic.provider_id(), "anthropic");
-    let _ = AutoLlmCredentialResolver::resolve_from_slice(&[
-        LlmCredentialProvider::OpenAi,
-        LlmCredentialProvider::Anthropic,
-    ]);
+    assert_eq!(GeminiProvider.provider_id(), "gemini");
+    assert_eq!(OpenAiProvider.provider_id(), "openai");
+    assert_eq!(AnthropicProvider.provider_id(), "anthropic");
+    let _ = AutoLlmCredentialResolver::resolve_from_slice(&[&OpenAiProvider, &AnthropicProvider]);
 }
 
 #[test]
@@ -268,8 +266,7 @@ fn test_anthropic_spi_wire_format_and_auth_headers_happy() {
         },
     ];
 
-    let Ok(req) = LlmCredentialProvider::Anthropic.build_request(&api_cfg, "sys", &msgs, &tools)
-    else {
+    let Ok(req) = AnthropicProvider.build_request(&api_cfg, "sys", &msgs, &tools) else {
         panic!("anthropic request");
     };
     assert_eq!(req.url, "https://api.anthropic.com/v1/messages");
@@ -293,7 +290,7 @@ fn test_anthropic_spi_wire_format_and_auth_headers_happy() {
     let mut oauth_cfg = api_cfg;
     oauth_cfg.api_key = "oauth-tok".to_string();
     oauth_cfg.auth_source = "env:ANTHROPIC_OAUTH_TOKEN".to_string();
-    let Ok(oauth_req) = LlmCredentialProvider::Anthropic.build_request(
+    let Ok(oauth_req) = AnthropicProvider.build_request(
         &oauth_cfg,
         "sys",
         &[LlmChatMessage::User("hi".to_string())],
@@ -333,7 +330,7 @@ fn test_llm_agent_anthropic_provider_spi_loop_happy() {
             api_key: "sk-ant-test".to_string(),
             max_turns: 4,
         },
-        &LlmCredentialProvider::Anthropic,
+        &AnthropicProvider,
         move |req_body| {
             turn += 1;
             assert!(req_body.get("max_tokens").is_some());
