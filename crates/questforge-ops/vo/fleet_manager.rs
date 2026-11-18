@@ -140,6 +140,7 @@ impl OpsEnv {
 
     fn post_json(
         &self,
+        provider: MdmProvider,
         url: &str,
         bearer_token: &str,
         payload: &serde_json::Value,
@@ -149,10 +150,12 @@ impl OpsEnv {
                 let auth = format!("Bearer {bearer_token}");
                 let resp = ureq::post(url)
                     .set("Authorization", &auth)
+                    .set("Accept", "application/json")
                     .set("Content-Type", "application/json")
                     .send_string(&payload.to_string())
-                    .map_err(|err| OpsError::AdbFailed {
-                        args: format!("POST {url}"),
+                    .map_err(|err| OpsError::MdmFailed {
+                        provider: provider.as_str().to_string(),
+                        endpoint: url.to_string(),
                         message: err.to_string(),
                     })?;
                 resp.into_string().map_err(|err| OpsError::Io {
@@ -193,13 +196,13 @@ pub enum MdmProvider {
 }
 
 impl MdmProvider {
-    /// Returns the default API endpoint for this MDM provider.
+    /// Returns the default API endpoint for this MDM provider and `app_id`.
     #[must_use]
-    pub const fn default_endpoint(self) -> &'static str {
+    pub fn default_endpoint_for(self, app_id: &str) -> String {
         match self {
-            Self::MetaHms => "https://graph.oculus.com/v1/hms/releases",
-            Self::ManageXr => "https://api.managexr.com/v1/apps/releases",
-            Self::ArborXr => "https://api.arborxr.com/v1/releases",
+            Self::MetaHms => format!("https://graph.oculus.com/v1/{app_id}/releases"),
+            Self::ManageXr => format!("https://managexrapi.com/v1/apps/{app_id}/versions"),
+            Self::ArborXr => format!("https://api.xrdm.app/api/v3/apps/{app_id}/releases"),
         }
     }
 
@@ -545,9 +548,14 @@ impl FleetManager {
         req: &HmsReleaseRequest,
         env: &OpsEnv,
     ) -> Result<HmsReleaseReceipt, OpsError> {
+        let endpoint = req
+            .endpoint
+            .clone()
+            .unwrap_or_else(|| req.provider.default_endpoint_for(&req.app_id));
         if req.access_token.trim().is_empty() {
-            return Err(OpsError::AdbFailed {
-                args: format!("{} push", req.provider.as_str()),
+            return Err(OpsError::MdmFailed {
+                provider: req.provider.as_str().to_string(),
+                endpoint,
                 message: "missing MDM access token".to_string(),
             });
         }
@@ -559,20 +567,31 @@ impl FleetManager {
         hasher.update(&apk_bytes);
         let apk_sha256 = hex::encode(hasher.finalize());
 
-        let endpoint = req
-            .endpoint
-            .as_deref()
-            .unwrap_or_else(|| req.provider.default_endpoint());
-        let payload = serde_json::json!({
-            "provider": req.provider.as_str(),
-            "app_id": req.app_id,
-            "channel": req.channel,
-            "device_group": req.device_group,
-            "apk_sha256": apk_sha256,
-            "apk_size_bytes": apk_bytes.len(),
-        });
+        let payload = match req.provider {
+            MdmProvider::MetaHms => serde_json::json!({
+                "app_id": req.app_id,
+                "channel": req.channel,
+                "device_group": req.device_group,
+                "apk_sha256": apk_sha256,
+                "apk_size_bytes": apk_bytes.len(),
+            }),
+            MdmProvider::ManageXr => serde_json::json!({
+                "packageName": req.app_id,
+                "releaseChannel": req.channel,
+                "deviceGroup": req.device_group,
+                "sha256": apk_sha256,
+                "sizeBytes": apk_bytes.len(),
+            }),
+            MdmProvider::ArborXr => serde_json::json!({
+                "appId": req.app_id,
+                "track": req.channel,
+                "group": req.device_group,
+                "sha256": apk_sha256,
+                "size_bytes": apk_bytes.len(),
+            }),
+        };
 
-        let raw_resp = env.post_json(endpoint, &req.access_token, &payload)?;
+        let raw_resp = env.post_json(req.provider, &endpoint, &req.access_token, &payload)?;
         let parsed: serde_json::Value =
             serde_json::from_str(&raw_resp).unwrap_or_else(|_| serde_json::json!({}));
         let release_id = parsed

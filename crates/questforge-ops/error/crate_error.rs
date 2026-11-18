@@ -30,6 +30,17 @@ pub enum OpsError {
         message: String,
     },
 
+    /// Enterprise MDM / Meta HMS HTTP release failed.
+    #[error("MDM publish failed ({provider} @ {endpoint}): {message}")]
+    MdmFailed {
+        /// Provider identifier (`meta-hms`, `managexr`, `arborxr`).
+        provider: String,
+        /// Endpoint URL.
+        endpoint: String,
+        /// Error details.
+        message: String,
+    },
+
     /// JSON serialization/deserialization error.
     #[error("inventory JSON error: {0}")]
     Json(#[from] serde_json::Error),

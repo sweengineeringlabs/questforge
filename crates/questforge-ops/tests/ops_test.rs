@@ -167,7 +167,7 @@ fn test_ops_publish_to_mdm_hms_and_missing_token_error() {
 
     let mut http_responses = BTreeMap::new();
     http_responses.insert(
-        MdmProvider::MetaHms.default_endpoint().to_string(),
+        MdmProvider::MetaHms.default_endpoint_for("app-123"),
         r#"{"id":"hms-rel-42","status":"published"}"#.to_string(),
     );
     let env = OpsEnv::Mock(MockOpsEnv {
@@ -209,5 +209,5 @@ fn test_ops_publish_to_mdm_hms_and_missing_token_error() {
         },
         &env,
     );
-    assert!(matches!(missing_token, Err(OpsError::AdbFailed { .. })));
+    assert!(matches!(missing_token, Err(OpsError::MdmFailed { .. })));
 }
