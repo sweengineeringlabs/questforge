@@ -256,22 +256,22 @@ pub struct HmsReleaseReceipt {
     pub apk_sha256: String,
 }
 
-/// Supported 1:1 `ovr-platform-util` Horizon Store operations.
+/// Supported 1:1 `ovr-platform-util` Horizon Store operations (`ovr-platform-util 211.0.0`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OvrStoreAction {
     /// `ovr-platform-util upload-quest-build`
     UploadQuestBuild,
-    /// `ovr-platform-util upload-dlc-build`
-    UploadDlcBuild,
-    /// `ovr-platform-util upload-debug-symbols`
-    UploadDebugSymbols,
+    /// `ovr-platform-util download-quest-build`
+    DownloadQuestBuild,
+    /// `ovr-platform-util get-release-channel-data`
+    GetReleaseChannelData,
     /// `ovr-platform-util set-release-channel-build`
     SetReleaseChannelBuild,
-    /// `ovr-platform-util list-builds`
-    ListBuilds,
-    /// `ovr-platform-util download-build`
-    DownloadBuild,
+    /// `ovr-platform-util download-asset-file`
+    DownloadAssetFile,
+    /// `ovr-platform-util version`
+    Version,
 }
 
 impl OvrStoreAction {
@@ -280,11 +280,11 @@ impl OvrStoreAction {
     pub const fn as_subcommand(self) -> &'static str {
         match self {
             Self::UploadQuestBuild => "upload-quest-build",
-            Self::UploadDlcBuild => "upload-dlc-build",
-            Self::UploadDebugSymbols => "upload-debug-symbols",
+            Self::DownloadQuestBuild => "download-quest-build",
+            Self::GetReleaseChannelData => "get-release-channel-data",
             Self::SetReleaseChannelBuild => "set-release-channel-build",
-            Self::ListBuilds => "list-builds",
-            Self::DownloadBuild => "download-build",
+            Self::DownloadAssetFile => "download-asset-file",
+            Self::Version => "version",
         }
     }
 }
@@ -770,20 +770,34 @@ impl FleetManager {
             endpoint: endpoint.clone(),
             message: msg.to_string(),
         };
-        if req.app_id.trim().is_empty() {
+        if req.action != OvrStoreAction::Version && req.app_id.trim().is_empty() {
             return Err(store_err("missing Meta Horizon App ID"));
         }
-        if req.app_secret.trim().is_empty() {
+        if matches!(
+            req.action,
+            OvrStoreAction::UploadQuestBuild
+                | OvrStoreAction::DownloadQuestBuild
+                | OvrStoreAction::SetReleaseChannelBuild
+                | OvrStoreAction::DownloadAssetFile
+        ) && req.app_secret.trim().is_empty()
+        {
             return Err(store_err("missing Meta Horizon App Secret"));
         }
 
-        let mut args = vec![
-            req.action.as_subcommand().to_string(),
-            "--app_id".to_string(),
-            req.app_id.trim().to_string(),
-            "--app_secret".to_string(),
-            req.app_secret.trim().to_string(),
-        ];
+        let mut args = vec![req.action.as_subcommand().to_string()];
+        if req.action != OvrStoreAction::Version {
+            args.extend(["--app_id".to_string(), req.app_id.trim().to_string()]);
+            if !req.app_secret.trim().is_empty() {
+                if req.action == OvrStoreAction::GetReleaseChannelData {
+                    args.extend(["--token".to_string(), req.app_secret.trim().to_string()]);
+                } else {
+                    args.extend([
+                        "--app_secret".to_string(),
+                        req.app_secret.trim().to_string(),
+                    ]);
+                }
+            }
+        }
 
         let mut artifact_sha256 = None;
         match req.action {
@@ -808,50 +822,38 @@ impl FleetManager {
                     apk.display().to_string(),
                     "--channel".to_string(),
                     channel.to_string(),
+                    "--disable-progress-bar".to_string(),
                 ]);
                 if let Some(dir) = &req.dir_path {
                     args.extend(["--debug_symbols_dir".to_string(), dir.display().to_string()]);
                 }
-            }
-            OvrStoreAction::UploadDlcBuild => {
-                let sku = req
-                    .dlc_sku
+                if let Some(notes) = req
+                    .release_notes
                     .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .ok_or_else(|| store_err("missing --sku for upload-dlc-build"))?;
-                let dir = req
-                    .dir_path
-                    .as_ref()
-                    .ok_or_else(|| store_err("missing --dir for upload-dlc-build"))?;
-                args.extend([
-                    "--sku".to_string(),
-                    sku.to_string(),
-                    "--assets_dir".to_string(),
-                    dir.display().to_string(),
-                ]);
-                if let Some(ch) = req.channel.as_deref().filter(|s| !s.trim().is_empty()) {
-                    args.extend(["--channel".to_string(), ch.trim().to_string()]);
+                    .filter(|n| !n.trim().is_empty())
+                {
+                    args.extend(["--notes".to_string(), notes.trim().to_string()]);
                 }
             }
-            OvrStoreAction::UploadDebugSymbols => {
+            OvrStoreAction::DownloadQuestBuild => {
                 let build_id = req
                     .build_id
                     .as_deref()
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                    .ok_or_else(|| store_err("missing --build-id for upload-debug-symbols"))?;
+                    .ok_or_else(|| store_err("missing --build-id for download-quest-build"))?;
                 let dir = req
                     .dir_path
                     .as_ref()
-                    .ok_or_else(|| store_err("missing --dir for upload-debug-symbols"))?;
+                    .ok_or_else(|| store_err("missing --dir for download-quest-build"))?;
                 args.extend([
                     "--build_id".to_string(),
                     build_id.to_string(),
-                    "--debug_symbols_dir".to_string(),
+                    "--output_dir".to_string(),
                     dir.display().to_string(),
                 ]);
             }
+            OvrStoreAction::GetReleaseChannelData => {}
             OvrStoreAction::SetReleaseChannelBuild => {
                 let build_id = req
                     .build_id
@@ -872,43 +874,39 @@ impl FleetManager {
                     channel.to_string(),
                 ]);
             }
-            OvrStoreAction::ListBuilds => {
-                if let Some(ch) = req.channel.as_deref().filter(|s| !s.trim().is_empty()) {
-                    args.extend(["--channel".to_string(), ch.trim().to_string()]);
-                }
-            }
-            OvrStoreAction::DownloadBuild => {
+            OvrStoreAction::DownloadAssetFile => {
                 let build_id = req
                     .build_id
                     .as_deref()
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                    .ok_or_else(|| store_err("missing --build-id for download-build"))?;
+                    .ok_or_else(|| store_err("missing --build-id for download-asset-file"))?;
                 let dir = req
                     .dir_path
                     .as_ref()
-                    .ok_or_else(|| store_err("missing --dir for download-build"))?;
+                    .ok_or_else(|| store_err("missing --dir for download-asset-file"))?;
                 args.extend([
                     "--build_id".to_string(),
                     build_id.to_string(),
-                    "--out".to_string(),
+                    "--output_dir".to_string(),
                     dir.display().to_string(),
                 ]);
             }
-        }
-
-        if let Some(notes) = req
-            .release_notes
-            .as_deref()
-            .filter(|n| !n.trim().is_empty())
-        {
-            args.extend(["--notes".to_string(), notes.trim().to_string()]);
+            OvrStoreAction::Version => {}
         }
 
         let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
         let out = env.run_bin(&ovr_bin, &args)?;
+        let stdout_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !out.success {
-            return Err(store_err(out.stderr.trim()));
+            let err_msg = if stdout_str.is_empty() {
+                out.stderr.trim().to_string()
+            } else if out.stderr.trim().is_empty() {
+                stdout_str
+            } else {
+                format!("{} | {}", out.stderr.trim(), stdout_str)
+            };
+            return Err(store_err(&err_msg));
         }
 
         Ok(OvrStoreReceipt {
@@ -918,7 +916,7 @@ impl FleetManager {
             build_id: req.build_id.as_ref().map(|s| s.trim().to_string()),
             artifact_sha256,
             ovr_bin,
-            stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+            stdout: stdout_str,
         })
     }
 }

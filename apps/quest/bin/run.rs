@@ -531,27 +531,27 @@ enum OpsAction {
 enum CliOvrStoreAction {
     #[value(name = "upload-quest-build")]
     UploadQuestBuild,
-    #[value(name = "upload-dlc-build")]
-    UploadDlcBuild,
-    #[value(name = "upload-debug-symbols")]
-    UploadDebugSymbols,
+    #[value(name = "download-quest-build")]
+    DownloadQuestBuild,
+    #[value(name = "get-release-channel-data")]
+    GetReleaseChannelData,
     #[value(name = "set-release-channel-build")]
     SetReleaseChannelBuild,
-    #[value(name = "list-builds")]
-    ListBuilds,
-    #[value(name = "download-build")]
-    DownloadBuild,
+    #[value(name = "download-asset-file")]
+    DownloadAssetFile,
+    #[value(name = "version")]
+    Version,
 }
 
 impl From<CliOvrStoreAction> for OvrStoreAction {
     fn from(value: CliOvrStoreAction) -> Self {
         match value {
             CliOvrStoreAction::UploadQuestBuild => Self::UploadQuestBuild,
-            CliOvrStoreAction::UploadDlcBuild => Self::UploadDlcBuild,
-            CliOvrStoreAction::UploadDebugSymbols => Self::UploadDebugSymbols,
+            CliOvrStoreAction::DownloadQuestBuild => Self::DownloadQuestBuild,
+            CliOvrStoreAction::GetReleaseChannelData => Self::GetReleaseChannelData,
             CliOvrStoreAction::SetReleaseChannelBuild => Self::SetReleaseChannelBuild,
-            CliOvrStoreAction::ListBuilds => Self::ListBuilds,
-            CliOvrStoreAction::DownloadBuild => Self::DownloadBuild,
+            CliOvrStoreAction::DownloadAssetFile => Self::DownloadAssetFile,
+            CliOvrStoreAction::Version => Self::Version,
         }
     }
 }

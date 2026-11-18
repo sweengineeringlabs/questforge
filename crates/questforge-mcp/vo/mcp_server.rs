@@ -272,12 +272,12 @@ impl QuestMcpServer {
             },
             McpToolDefinition {
                 name: "ovr_store".to_string(),
-                description: "Execute any 1:1 ovr-platform-util Horizon Store operation (upload-quest-build, upload-dlc-build, upload-debug-symbols, set-release-channel-build, list-builds, download-build).".to_string(),
+                description: "Execute any 1:1 ovr-platform-util Horizon Store operation (upload-quest-build, download-quest-build, get-release-channel-data, set-release-channel-build, download-asset-file, version).".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "required": ["action", "app_id"],
                     "properties": {
-                        "action": { "type": "string", "enum": ["upload-quest-build", "upload-dlc-build", "upload-debug-symbols", "set-release-channel-build", "list-builds", "download-build"] },
+                        "action": { "type": "string", "enum": ["upload-quest-build", "download-quest-build", "get-release-channel-data", "set-release-channel-build", "download-asset-file", "version"] },
                         "app_id": { "type": "string" },
                         "apk_path": { "type": "string" },
                         "channel": { "type": "string" },
@@ -840,11 +840,11 @@ fn call_ovr_store(args: &Value) -> Result<String, String> {
         .ok_or_else(|| "missing action".to_string())?;
     let action = match action_raw {
         "upload-quest-build" => OvrStoreAction::UploadQuestBuild,
-        "upload-dlc-build" => OvrStoreAction::UploadDlcBuild,
-        "upload-debug-symbols" => OvrStoreAction::UploadDebugSymbols,
+        "download-quest-build" => OvrStoreAction::DownloadQuestBuild,
+        "get-release-channel-data" => OvrStoreAction::GetReleaseChannelData,
         "set-release-channel-build" => OvrStoreAction::SetReleaseChannelBuild,
-        "list-builds" => OvrStoreAction::ListBuilds,
-        "download-build" => OvrStoreAction::DownloadBuild,
+        "download-asset-file" => OvrStoreAction::DownloadAssetFile,
+        "version" => OvrStoreAction::Version,
         other => return Err(format!("unsupported ovr_store action: {other}")),
     };
     let app_id = args

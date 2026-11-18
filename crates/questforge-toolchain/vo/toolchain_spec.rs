@@ -267,15 +267,20 @@ impl ToolchainProvisioner {
             let url = opts
                 .ovr_url
                 .clone()
+                .or_else(|| default_ovr_url(platform))
                 .ok_or_else(|| ToolchainError::MissingSpec {
                     tool: ToolKind::OvrPlatformUtil.dir_name().to_string(),
                     version: version.clone(),
                     reason: "provide --ovr-url and --ovr-sha256 for ovr-platform-util".to_string(),
                 })?;
-            let ovr_sha = opts.ovr_sha256.clone().or_else(|| {
-                cfg.as_ref()
-                    .and_then(|c| c.toolchain.metavr_cli.ovr_sha256.clone())
-            });
+            let ovr_sha = opts
+                .ovr_sha256
+                .clone()
+                .or_else(|| {
+                    cfg.as_ref()
+                        .and_then(|c| c.toolchain.metavr_cli.ovr_sha256.clone())
+                })
+                .or_else(|| default_ovr_sha256(platform));
             specs.push(ToolArtifactSpec {
                 tool: ToolKind::OvrPlatformUtil,
                 version,
@@ -550,4 +555,20 @@ fn default_cmdline_tools_url(platform: &PlatformTarget, version: &str) -> String
     format!(
         "https://dl.google.com/android/repository/commandlinetools-{os_tag}-{version}_latest.zip"
     )
+}
+
+fn default_ovr_url(platform: &PlatformTarget) -> Option<String> {
+    if platform.os == "windows" {
+        Some("https://www.oculus.com/download_app/?id=1076686279105243".to_string())
+    } else {
+        None
+    }
+}
+
+fn default_ovr_sha256(platform: &PlatformTarget) -> Option<String> {
+    if platform.os == "windows" {
+        Some("97c3407c38955efb04c9d2e1860c58fea0b64be08860ff8a6591b2411b88b70a".to_string())
+    } else {
+        None
+    }
 }
