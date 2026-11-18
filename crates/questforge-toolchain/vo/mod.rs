@@ -1,9 +1,12 @@
 //! Value objects module.
 //!
 //! ```compile_fail
-//! use questforge_toolchain::vo::crate_data::CrateData;
+//! use questforge_toolchain::vo::toolchain_spec::ToolchainProvisioner;
 //! ```
 
-mod crate_data;
+mod toolchain_spec;
 
-pub use self::crate_data::CrateData;
+pub use self::toolchain_spec::{
+    InstalledTool, PlatformTarget, SetupOptions, SetupReport, ToolArtifactSpec, ToolKind,
+    ToolchainProvisioner,
+};
