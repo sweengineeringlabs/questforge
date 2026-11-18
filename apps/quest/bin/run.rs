@@ -838,15 +838,53 @@ fn run_agent(args: AgentArgs) -> ExitCode {
     };
 
     if let Some(prompt) = args.prompt {
+        let mut api_key = std::env::var(&args.api_key_env)
+            .ok()
+            .filter(|k| !k.trim().is_empty())
+            .or_else(|| {
+                std::env::var("GEMINI_API_KEY")
+                    .ok()
+                    .filter(|k| !k.trim().is_empty())
+            })
+            .or_else(|| {
+                std::env::var("GOOGLE_API_KEY")
+                    .ok()
+                    .filter(|k| !k.trim().is_empty())
+            })
+            .unwrap_or_default();
+
+        let mut using_gcloud_gemini = false;
+        if api_key.is_empty()
+            && args.llm_url.is_none()
+            && std::env::var("QUESTFORGE_LLM_URL").is_err()
+        {
+            if let Some(discovered) = discover_gemini_key_via_gcloud() {
+                api_key = discovered;
+                using_gcloud_gemini = true;
+            }
+        }
+
         let llm_url = args
             .llm_url
             .or_else(|| std::env::var("QUESTFORGE_LLM_URL").ok())
-            .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
+            .unwrap_or_else(|| {
+                if using_gcloud_gemini {
+                    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+                        .to_string()
+                } else {
+                    "https://api.openai.com/v1/chat/completions".to_string()
+                }
+            });
         let model = args
             .model
             .or_else(|| std::env::var("QUESTFORGE_LLM_MODEL").ok())
-            .unwrap_or_else(|| "gpt-4o-mini".to_string());
-        let api_key = std::env::var(&args.api_key_env).unwrap_or_default();
+            .unwrap_or_else(|| {
+                if using_gcloud_gemini {
+                    "gemini-flash-lite-latest".to_string()
+                } else {
+                    "gpt-4o-mini".to_string()
+                }
+            });
         let llm_opts = LlmAgentOptions {
             project_dir: args.project_dir,
             prompt,
@@ -928,6 +966,69 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn discover_gemini_key_via_gcloud() -> Option<String> {
+    let gcloud = if cfg!(windows) {
+        "gcloud.cmd"
+    } else {
+        "gcloud"
+    };
+    let projects_out = std::process::Command::new(gcloud)
+        .args([
+            "projects",
+            "list",
+            "--filter=projectId:gen-lang-client*",
+            "--format=value(projectId)",
+            "--limit=5",
+        ])
+        .output()
+        .ok()?;
+    if !projects_out.status.success() {
+        return None;
+    }
+    for proj in String::from_utf8_lossy(&projects_out.stdout).lines() {
+        let proj = proj.trim();
+        if proj.is_empty() {
+            continue;
+        }
+        let keys_out = std::process::Command::new(gcloud)
+            .args([
+                "services",
+                "api-keys",
+                "list",
+                "--project",
+                proj,
+                "--filter=restrictions.apiTargets.service:generativelanguage.googleapis.com",
+                "--format=value(uid)",
+                "--limit=1",
+            ])
+            .output()
+            .ok()?;
+        let uid = String::from_utf8_lossy(&keys_out.stdout).trim().to_string();
+        if uid.is_empty() {
+            continue;
+        }
+        let str_out = std::process::Command::new(gcloud)
+            .args([
+                "services",
+                "api-keys",
+                "get-key-string",
+                &uid,
+                "--project",
+                proj,
+                "--format=value(keyString)",
+            ])
+            .output()
+            .ok()?;
+        if str_out.status.success() {
+            let key = String::from_utf8_lossy(&str_out.stdout).trim().to_string();
+            if !key.is_empty() {
+                return Some(key);
+            }
+        }
+    }
+    None
 }
 
 fn run_ops(args: OpsArgs) -> ExitCode {
