@@ -8,6 +8,7 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::EngineKind;
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
+use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_verify::{ApkVerifier, VerifyOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -201,6 +202,34 @@ impl QuestMcpServer {
                     }
                 }),
             },
+            McpToolDefinition {
+                name: "fleet_discover".to_string(),
+                description: "Discover connected Meta Quest headsets or Android emulators over adb and update fleet inventory.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "group": { "type": "string", "default": "default" },
+                        "registry": { "type": "string", "default": ".questforge/fleet.json" }
+                    }
+                }),
+            },
+            McpToolDefinition {
+                name: "publish_mdm".to_string(),
+                description: "Publish a verified APK to Meta HMS, ManageXR, or ArborXR enterprise MDM.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "required": ["app_id", "apk_path"],
+                    "properties": {
+                        "provider": { "type": "string", "enum": ["meta-hms", "managexr", "arborxr"], "default": "meta-hms" },
+                        "app_id": { "type": "string" },
+                        "apk_path": { "type": "string" },
+                        "channel": { "type": "string", "default": "PRODUCTION" },
+                        "device_group": { "type": "string", "default": "default" },
+                        "endpoint": { "type": "string" },
+                        "token_env": { "type": "string", "default": "QUESTFORGE_MDM_TOKEN" }
+                    }
+                }),
+            },
         ]
     }
 
@@ -315,6 +344,8 @@ impl QuestMcpServer {
             "generate_pipeline" => call_generate_pipeline(&args),
             "analyze_build_failure" => call_analyze_build_failure(&args),
             "search_docs" => self.call_search_docs(&args),
+            "fleet_discover" => call_fleet_discover(&args),
+            "publish_mdm" => call_publish_mdm(&args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -566,6 +597,75 @@ fn call_analyze_build_failure(args: &Value) -> Result<String, String> {
     }
 
     serde_json::to_string_pretty(&json!({ "diagnostics": diagnostics })).map_err(|e| e.to_string())
+}
+
+fn call_fleet_discover(args: &Value) -> Result<String, String> {
+    let group = args
+        .get("group")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+    let registry = args
+        .get("registry")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".questforge/fleet.json");
+    let reg_path = PathBuf::from(registry);
+    let mut inv = FleetInventory::load(&reg_path).map_err(|e| e.to_string())?;
+    let devs =
+        FleetManager::discover(&mut inv, group, &OpsEnv::System).map_err(|e| e.to_string())?;
+    inv.save(&reg_path).map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&devs).map_err(|e| e.to_string())
+}
+
+fn call_publish_mdm(args: &Value) -> Result<String, String> {
+    let provider = match args.get("provider").and_then(|v| v.as_str()) {
+        None | Some("meta-hms") => MdmProvider::MetaHms,
+        Some("managexr") => MdmProvider::ManageXr,
+        Some("arborxr") => MdmProvider::ArborXr,
+        Some(other) => return Err(format!("unknown MDM provider: '{other}'")),
+    };
+    let app_id = args
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing 'app_id'".to_string())?
+        .to_string();
+    let apk_path = args
+        .get("apk_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing 'apk_path'".to_string())?;
+    let channel = args
+        .get("channel")
+        .and_then(|v| v.as_str())
+        .unwrap_or("PRODUCTION")
+        .to_string();
+    let device_group = args
+        .get("device_group")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+    let endpoint = args
+        .get("endpoint")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
+    let token_env = args
+        .get("token_env")
+        .and_then(|v| v.as_str())
+        .unwrap_or("QUESTFORGE_MDM_TOKEN");
+    let access_token = std::env::var(token_env).unwrap_or_default();
+
+    let receipt = FleetManager::publish_to_mdm(
+        &HmsReleaseRequest {
+            provider,
+            app_id,
+            apk_path: PathBuf::from(apk_path),
+            channel,
+            device_group,
+            endpoint,
+            access_token,
+        },
+        &OpsEnv::System,
+    )
+    .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
 }
 
 fn collect_doc_hits(dir: &Path, needle: &str, hits: &mut Vec<Value>) {

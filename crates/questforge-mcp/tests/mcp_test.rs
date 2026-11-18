@@ -34,7 +34,7 @@ fn test_mcp_initialize_and_tools_list_happy() {
                     .as_ref()
                     .and_then(|v| v.get("tools"))
                     .and_then(|t| t.as_array())
-                    .is_some_and(|arr| arr.len() == 9)
+                    .is_some_and(|arr| arr.len() == 11)
     ));
 }
 

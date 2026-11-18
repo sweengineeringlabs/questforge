@@ -935,6 +935,7 @@ dependencies = [
  "questforge-config",
  "questforge-doctor",
  "questforge-init",
+ "questforge-ops",
  "questforge-verify",
  "serde",
  "serde_json",

@@ -19,6 +19,7 @@ questforge-ci.workspace = true
 questforge-config.workspace = true
 questforge-doctor.workspace = true
 questforge-init.workspace = true
+questforge-ops.workspace = true
 questforge-verify.workspace = true
 serde.workspace = true
 serde_json.workspace = true
