@@ -72,6 +72,20 @@ This script exercises the full stack end-to-end:
 4. Builds and audits a signed ARM64 Quest APK fixture (`quest verify --format json`)
 5. Publishes the project, build, verification scorecard, and deployment to `http://127.0.0.1:8090/api/*`
 
+### Showcase Game Playbook (`examples/orbit-pulse-vr`)
+
+With `quest serve --addr 127.0.0.1:8090 --web-root web/dist` running:
+```pwsh
+cd examples/orbit-pulse-vr
+quest sync
+quest check
+cargo test
+quest ci --output-dir dist --release-version 1.0.0
+quest verify dist/orbit-pulse-vr-1.0.0.apk
+.\scripts\publish-demo.ps1    # or `scripts\publish-demo.cmd` in cmd.exe
+```
+Open `http://127.0.0.1:8090/` to inspect `orbit-pulse-vr`, its build, its `100/100` VRC scorecard, and the audit log.
+
 ---
 
 ## 5. Running the Lab Fleet Agent (`quest ops agent`)
@@ -88,6 +102,9 @@ quest ops agent --server http://127.0.0.1:8090 --group qa-lab
 | Symptom | Cause | Resolution |
 |---|---|---|
 | `os error 10048` on `quest serve` | Port already in use | Pass `--addr 127.0.0.1:<free-port>` |
+| `/` shows only `"Powered by machineweb (mweb) components..."` | `quest serve` started without `--web-root` (serving `FALLBACK_DASHBOARD_HTML`) | Restart with `--web-root web/dist` (e.g. `quest serve --addr 127.0.0.1:8090 --web-root C:\phd-systems\swelabs\metaquest\web\dist`) |
 | Blank page or CSS/JS `404` on `/` | `web/dist/` not built or `--web-root` points to `web/` instead of `web/dist` | Run `bun run build` in `web/` and pass `--web-root web/dist` |
+| `401 {"error": "missing X-Quest-Role"}` on `POST` | Missing RBAC role header in DevHeader auth mode | Pass `-H "X-Quest-Role: admin"` (or `developer` / `platform_engineer` / `operations_engineer`) |
+| `404` on `POST /api/reports` | Write endpoint for verification scorecards is `POST /api/verify` | Post verification results to `POST /api/verify`; read via `GET /api/reports` |
 | `native TypeScript is missing` in `mweb check` | Dependencies not installed in `web/` | Run `bun install` inside `web/` |
 | `MissingChecksum` in `quest setup` | Zero-trust policy requires SHA-256 | Provide `--adb-sha256` / `--ovr-sha256` (or `quest_forge.yaml` `*_sha256` fields) |
