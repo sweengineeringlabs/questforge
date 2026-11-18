@@ -9,8 +9,8 @@ use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmAgentOptions, QuestMcpServer,
-    QuestXrAgent,
+    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmCredentialProvider, LlmEndpointConfig,
+    QuestMcpServer, QuestXrAgent,
 };
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
@@ -847,11 +847,11 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         let resolved = if explicit_key.is_some() {
             None
         } else {
-            AutoLlmCredentialResolver::resolve_first()
+            AutoLlmCredentialResolver::resolve_first_with_provider()
         };
 
         let api_key = explicit_key
-            .or_else(|| resolved.as_ref().map(|r| r.api_key.clone()))
+            .or_else(|| resolved.as_ref().map(|(_, r)| r.api_key.clone()))
             .unwrap_or_default();
         let llm_url = args
             .llm_url
@@ -860,7 +860,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
                     .ok()
                     .filter(|v| !v.trim().is_empty())
             })
-            .or_else(|| resolved.as_ref().map(|r| r.endpoint_url.clone()))
+            .or_else(|| resolved.as_ref().map(|(_, r)| r.endpoint_url.clone()))
             .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
         let model = args
             .model
@@ -869,17 +869,38 @@ fn run_agent(args: AgentArgs) -> ExitCode {
                     .ok()
                     .filter(|v| !v.trim().is_empty())
             })
-            .or_else(|| resolved.as_ref().map(|r| r.default_model.clone()))
+            .or_else(|| resolved.as_ref().map(|(_, r)| r.default_model.clone()))
             .unwrap_or_else(|| "gpt-4o-mini".to_string());
-        let llm_opts = LlmAgentOptions {
-            project_dir: args.project_dir,
-            prompt,
-            llm_url,
-            model,
+        let provider = resolved
+            .as_ref()
+            .filter(|(_, r)| r.endpoint_url == llm_url)
+            .map(|(p, _)| *p)
+            .unwrap_or_else(|| LlmCredentialProvider::from_url(&llm_url));
+        let auth_source = resolved
+            .as_ref()
+            .map(|(_, r)| r.auth_source.clone())
+            .unwrap_or_else(|| {
+                if api_key.starts_with("sk-ant-oat") {
+                    "oauth".to_string()
+                } else {
+                    "api-key".to_string()
+                }
+            });
+        let endpoint_cfg = LlmEndpointConfig {
+            provider_id: provider.provider_id().to_string(),
+            endpoint_url: llm_url,
+            default_model: model,
             api_key,
-            max_turns: args.max_turns,
+            auth_source,
         };
-        return match QuestXrAgent::run_llm_stdio_client(&quest_bin, &llm_opts) {
+        return match QuestXrAgent::run_llm_stdio_client_with_spi(
+            &quest_bin,
+            &args.project_dir,
+            &prompt,
+            args.max_turns,
+            &provider,
+            &endpoint_cfg,
+        ) {
             Ok(report) => {
                 if args.json {
                     println!(

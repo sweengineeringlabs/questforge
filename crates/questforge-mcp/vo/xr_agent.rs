@@ -7,6 +7,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::traits::LlmProviderSpi;
+use crate::vo::llm_providers::{
+    LlmChatMessage, LlmCredentialProvider, LlmEndpointConfig, LlmToolSchema,
+};
 use crate::vo::mcp_server::{JsonRpcRequest, JsonRpcResponse, QuestMcpServer};
 use crate::McpError;
 
@@ -135,28 +139,68 @@ impl QuestXrAgent {
         quest_bin: &Path,
         opts: &LlmAgentOptions,
     ) -> Result<LlmRunReport, McpError> {
+        let provider = LlmCredentialProvider::from_url(&opts.llm_url);
+        let auth_source = if opts.api_key.starts_with("sk-ant-oat") {
+            "oauth".to_string()
+        } else {
+            "api-key".to_string()
+        };
+        let config = LlmEndpointConfig {
+            provider_id: provider.provider_id().to_string(),
+            endpoint_url: opts.llm_url.clone(),
+            default_model: opts.model.clone(),
+            api_key: opts.api_key.clone(),
+            auth_source,
+        };
+        Self::run_llm_stdio_client_with_spi(
+            quest_bin,
+            &opts.project_dir,
+            &opts.prompt,
+            opts.max_turns,
+            &provider,
+            &config,
+        )
+    }
+
+    /// Spawns `<quest_bin> mcp --workspace-root <project_dir>` and runs an LLM ReAct loop
+    /// using an explicit [`LlmProviderSpi`] implementation and [`LlmEndpointConfig`].
+    pub fn run_llm_stdio_client_with_spi(
+        quest_bin: &Path,
+        project_dir: &Path,
+        prompt: &str,
+        max_turns: usize,
+        provider: &dyn LlmProviderSpi,
+        config: &LlmEndpointConfig,
+    ) -> Result<LlmRunReport, McpError> {
         let mut child = Command::new(quest_bin)
             .args(["mcp", "--workspace-root"])
-            .arg(&opts.project_dir)
+            .arg(project_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()?;
 
         let mut transport = StdioRpcTransport::from_child(&mut child)?;
-        let res = Self::execute_llm_loop(&mut transport, opts, |payload| {
-            let mut req = ureq::post(&opts.llm_url).set("Content-Type", "application/json");
-            if !opts.api_key.trim().is_empty() {
-                req = req.set("Authorization", &format!("Bearer {}", opts.api_key));
-            }
-            let resp = req
-                .send_string(&payload.to_string())
-                .map_err(|err| std::io::Error::other(format!("LLM HTTP error: {err}")))?;
-            let raw = resp
-                .into_string()
-                .map_err(|err| std::io::Error::other(format!("LLM read error: {err}")))?;
-            Ok(serde_json::from_str(&raw)?)
-        });
+        let res = Self::execute_llm_loop(
+            &mut transport,
+            prompt,
+            max_turns,
+            provider,
+            config,
+            |http_req| {
+                let mut req = ureq::post(&http_req.url);
+                for (header, val) in &http_req.headers {
+                    req = req.set(header, val);
+                }
+                let resp = req
+                    .send_string(&http_req.body.to_string())
+                    .map_err(|err| std::io::Error::other(format!("LLM HTTP error: {err}")))?;
+                let raw = resp
+                    .into_string()
+                    .map_err(|err| std::io::Error::other(format!("LLM read error: {err}")))?;
+                Ok(serde_json::from_str(&raw)?)
+            },
+        );
         drop(transport);
         let _ = child.wait();
         res
@@ -170,18 +214,48 @@ impl QuestXrAgent {
     where
         F: FnMut(&Value) -> Result<Value, McpError>,
     {
-        let server = QuestMcpServer::new(opts.project_dir.clone());
-        let mut transport = InProcessRpcTransport { server, next_id: 1 };
-        Self::execute_llm_loop(&mut transport, opts, completer)
+        let provider = LlmCredentialProvider::from_url(&opts.llm_url);
+        Self::run_llm_in_process_with_provider(opts, &provider, completer)
     }
 
-    fn execute_llm_loop<T: RpcTransport, F>(
-        rpc: &mut T,
+    /// Runs the LLM ReAct loop in-process with an explicit [`LlmProviderSpi`] and callback.
+    pub fn run_llm_in_process_with_provider<F>(
         opts: &LlmAgentOptions,
+        provider: &dyn LlmProviderSpi,
         mut completer: F,
     ) -> Result<LlmRunReport, McpError>
     where
         F: FnMut(&Value) -> Result<Value, McpError>,
+    {
+        let server = QuestMcpServer::new(opts.project_dir.clone());
+        let mut transport = InProcessRpcTransport { server, next_id: 1 };
+        let config = LlmEndpointConfig {
+            provider_id: provider.provider_id().to_string(),
+            endpoint_url: opts.llm_url.clone(),
+            default_model: opts.model.clone(),
+            api_key: opts.api_key.clone(),
+            auth_source: "test".to_string(),
+        };
+        Self::execute_llm_loop(
+            &mut transport,
+            &opts.prompt,
+            opts.max_turns,
+            provider,
+            &config,
+            |http_req| completer(&http_req.body),
+        )
+    }
+
+    fn execute_llm_loop<T: RpcTransport, F>(
+        rpc: &mut T,
+        prompt: &str,
+        max_turns: usize,
+        provider: &dyn LlmProviderSpi,
+        config: &LlmEndpointConfig,
+        mut completer: F,
+    ) -> Result<LlmRunReport, McpError>
+    where
+        F: FnMut(&crate::vo::llm_providers::LlmHttpRequest) -> Result<Value, McpError>,
     {
         let _init = rpc.request("initialize", json!({}))?;
         let tools_res = rpc.request("tools/list", json!({}))?;
@@ -192,96 +266,61 @@ impl QuestXrAgent {
             .unwrap_or_default();
 
         let mut discovered_tools = Vec::with_capacity(raw_tools.len());
-        let mut openai_tools = Vec::with_capacity(raw_tools.len());
+        let mut tool_schemas = Vec::with_capacity(raw_tools.len());
         for t in &raw_tools {
             if let Some(name) = t.get("name").and_then(|v| v.as_str()) {
                 discovered_tools.push(name.to_string());
-                openai_tools.push(json!({
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": t.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                        "parameters": t.get("inputSchema").cloned().unwrap_or_else(|| json!({"type":"object"}))
-                    }
-                }));
+                tool_schemas.push(LlmToolSchema {
+                    name: name.to_string(),
+                    description: t
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    input_schema: t
+                        .get("inputSchema")
+                        .cloned()
+                        .unwrap_or_else(|| json!({"type":"object"})),
+                });
             }
         }
 
-        let mut messages = vec![
-            json!({
-                "role": "system",
-                "content": "You are the QuestForge XR DevOps agent. Always use the provided MCP tools to inspect, sync, build, verify, or deploy Quest projects."
-            }),
-            json!({
-                "role": "user",
-                "content": opts.prompt
-            }),
-        ];
+        let system_prompt = "You are the QuestForge XR DevOps agent. Always use the provided MCP tools to inspect, sync, build, verify, or deploy Quest projects.";
+        let mut messages = vec![LlmChatMessage::User(prompt.to_string())];
         let mut steps = Vec::new();
-        let max_turns = opts.max_turns.max(1);
+        let max_turns = max_turns.max(1);
 
         for _ in 0..max_turns {
-            let req_body = json!({
-                "model": opts.model,
-                "messages": messages,
-                "tools": openai_tools
-            });
-            let llm_resp = completer(&req_body)?;
-            let message = llm_resp
-                .get("choices")
-                .and_then(|c| c.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|choice| choice.get("message"))
-                .cloned()
-                .ok_or_else(|| std::io::Error::other("LLM response missing choices[0].message"))?;
+            let http_req =
+                provider.build_request(config, system_prompt, &messages, &tool_schemas)?;
+            let llm_resp = completer(&http_req)?;
+            let turn = provider.parse_response(&llm_resp)?;
 
-            let tool_calls = message
-                .get("tool_calls")
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-
-            if tool_calls.is_empty() {
-                let final_answer = message
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+            if turn.tool_calls.is_empty() {
                 return Ok(LlmRunReport {
-                    model: opts.model.clone(),
+                    model: config.default_model.clone(),
                     discovered_tools,
                     steps,
-                    final_answer,
+                    final_answer: turn.text,
                 });
             }
 
-            messages.push(message.clone());
-            for tc in tool_calls {
-                let tc_id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("call_1");
-                let fn_name = tc
-                    .get("function")
-                    .and_then(|f| f.get("name"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let raw_args = tc
-                    .get("function")
-                    .and_then(|f| f.get("arguments"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("{}");
-                let parsed_args: Value =
-                    serde_json::from_str(raw_args).unwrap_or_else(|_| json!({}));
-
-                let (_ok, tool_out) = call_mcp_tool(rpc, &mut steps, fn_name, parsed_args)?;
-                messages.push(json!({
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": tool_out.to_string()
-                }));
+            messages.push(LlmChatMessage::Assistant {
+                text: turn.text,
+                tool_calls: turn.tool_calls.clone(),
+            });
+            for tc in turn.tool_calls {
+                let (_ok, tool_out) = call_mcp_tool(rpc, &mut steps, &tc.name, tc.arguments)?;
+                messages.push(LlmChatMessage::ToolResult {
+                    tool_call_id: tc.id,
+                    name: tc.name,
+                    content: tool_out.to_string(),
+                });
             }
         }
 
         Ok(LlmRunReport {
-            model: opts.model.clone(),
+            model: config.default_model.clone(),
             discovered_tools,
             steps,
             final_answer: "Reached max ReAct turns before receiving a final LLM summary."

@@ -6,9 +6,10 @@ use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
     AgentGoal, AgentOptions, AutoLlmCredentialResolver, JsonRpcRequest, LlmAgentOptions,
-    LlmCredentialProvider, QuestMcpServer, QuestXrAgent,
+    LlmChatMessage, LlmCredentialProvider, LlmEndpointConfig, LlmHttpRequest, LlmProviderSpi,
+    LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError, QuestMcpServer, QuestXrAgent,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use tempfile::TempDir;
 
 #[test]
@@ -234,4 +235,205 @@ fn test_llm_credential_provider_resolves_configured_providers_happy() {
         LlmCredentialProvider::OpenAi,
         LlmCredentialProvider::Anthropic,
     ]);
+}
+
+#[test]
+fn test_anthropic_spi_wire_format_and_auth_headers_happy() {
+    let api_cfg = LlmEndpointConfig {
+        provider_id: "anthropic".to_string(),
+        endpoint_url: "https://api.anthropic.com/v1/messages".to_string(),
+        default_model: "claude-3-5-sonnet-latest".to_string(),
+        api_key: "sk-ant-api-test".to_string(),
+        auth_source: "env:ANTHROPIC_API_KEY".to_string(),
+    };
+    let tools = vec![LlmToolSchema {
+        name: "check_source".to_string(),
+        description: "Run static check".to_string(),
+        input_schema: json!({"type": "object"}),
+    }];
+    let msgs = vec![
+        LlmChatMessage::User("Check project".to_string()),
+        LlmChatMessage::Assistant {
+            text: String::new(),
+            tool_calls: vec![LlmToolInvocation {
+                id: "toolu_1".to_string(),
+                name: "check_source".to_string(),
+                arguments: json!({"project_dir": "."}),
+            }],
+        },
+        LlmChatMessage::ToolResult {
+            tool_call_id: "toolu_1".to_string(),
+            name: "check_source".to_string(),
+            content: "{\"ok\":true}".to_string(),
+        },
+    ];
+
+    let Ok(req) = LlmCredentialProvider::Anthropic.build_request(&api_cfg, "sys", &msgs, &tools)
+    else {
+        panic!("anthropic request");
+    };
+    assert_eq!(req.url, "https://api.anthropic.com/v1/messages");
+    assert!(req
+        .headers
+        .contains(&("x-api-key".to_string(), "sk-ant-api-test".to_string())));
+    assert!(req
+        .headers
+        .contains(&("anthropic-version".to_string(), "2023-06-01".to_string())));
+    assert_eq!(req.body["system"], json!("sys"));
+    assert_eq!(req.body["max_tokens"], json!(4096));
+    assert_eq!(
+        req.body["tools"][0]["input_schema"],
+        json!({"type": "object"})
+    );
+    assert_eq!(
+        req.body["messages"][2]["content"][0]["type"],
+        json!("tool_result")
+    );
+
+    let mut oauth_cfg = api_cfg;
+    oauth_cfg.api_key = "oauth-tok".to_string();
+    oauth_cfg.auth_source = "env:ANTHROPIC_OAUTH_TOKEN".to_string();
+    let Ok(oauth_req) = LlmCredentialProvider::Anthropic.build_request(
+        &oauth_cfg,
+        "sys",
+        &[LlmChatMessage::User("hi".to_string())],
+        &[],
+    ) else {
+        panic!("anthropic oauth request");
+    };
+    assert!(oauth_req
+        .headers
+        .contains(&("Authorization".to_string(), "Bearer oauth-tok".to_string())));
+}
+
+#[test]
+fn test_llm_agent_anthropic_provider_spi_loop_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let proj = dir.path().join("anthropic-quest");
+    assert!(ProjectScaffolder::scaffold(&InitOptions {
+        target_dir: proj.clone(),
+        name: "anthropic-quest".to_string(),
+        package_id: "com.acme.anthropicquest".to_string(),
+        engine: EngineKind::Rust,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    })
+    .is_ok());
+
+    let mut turn = 0usize;
+    let res = QuestXrAgent::run_llm_in_process_with_provider(
+        &LlmAgentOptions {
+            project_dir: proj.clone(),
+            prompt: "Check anthropic-quest".to_string(),
+            llm_url: "https://api.anthropic.com/v1/messages".to_string(),
+            model: "claude-3-5-sonnet-latest".to_string(),
+            api_key: "sk-ant-test".to_string(),
+            max_turns: 4,
+        },
+        &LlmCredentialProvider::Anthropic,
+        move |req_body| {
+            turn += 1;
+            assert!(req_body.get("max_tokens").is_some());
+            assert!(req_body.get("system").is_some());
+            if turn == 1 {
+                Ok(json!({
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_01",
+                        "name": "check_source",
+                        "input": { "project_dir": proj }
+                    }]
+                }))
+            } else {
+                Ok(json!({
+                    "content": [{
+                        "type": "text",
+                        "text": "Anthropic SPI loop completed static check."
+                    }]
+                }))
+            }
+        },
+    );
+
+    assert!(matches!(
+        res,
+        Ok(ref r)
+            if r.steps.len() == 1
+                && r.steps[0].tool == "check_source"
+                && r.steps[0].ok
+                && r.final_answer.contains("Anthropic SPI loop completed")
+    ));
+}
+
+struct CustomSpiProvider;
+
+impl LlmProviderSpi for CustomSpiProvider {
+    fn provider_id(&self) -> &'static str {
+        "custom-local"
+    }
+
+    fn resolve_credentials(&self) -> Option<LlmEndpointConfig> {
+        Some(LlmEndpointConfig {
+            provider_id: "custom-local".to_string(),
+            endpoint_url: "http://localhost:9999/v1/chat".to_string(),
+            default_model: "local-v1".to_string(),
+            api_key: String::new(),
+            auth_source: "local".to_string(),
+        })
+    }
+
+    fn build_request(
+        &self,
+        config: &LlmEndpointConfig,
+        system_prompt: &str,
+        messages: &[LlmChatMessage],
+        _tools: &[LlmToolSchema],
+    ) -> Result<LlmHttpRequest, McpError> {
+        Ok(LlmHttpRequest {
+            url: config.endpoint_url.clone(),
+            headers: vec![],
+            body: json!({
+                "model": config.default_model,
+                "system": system_prompt,
+                "count": messages.len()
+            }),
+        })
+    }
+
+    fn parse_response(&self, body: &Value) -> Result<LlmTurnResponse, McpError> {
+        Ok(LlmTurnResponse {
+            text: body["reply"].as_str().unwrap_or("").to_string(),
+            tool_calls: vec![],
+        })
+    }
+}
+
+#[test]
+fn test_custom_llm_provider_spi_implementation_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let custom = CustomSpiProvider;
+    assert_eq!(custom.provider_id(), "custom-local");
+    let Some(cfg) = custom.resolve_credentials() else {
+        panic!("custom cfg");
+    };
+    let Ok(report) = QuestXrAgent::run_llm_in_process_with_provider(
+        &LlmAgentOptions {
+            project_dir: dir.path().to_path_buf(),
+            prompt: "ping".to_string(),
+            llm_url: cfg.endpoint_url,
+            model: cfg.default_model,
+            api_key: cfg.api_key,
+            max_turns: 2,
+        },
+        &custom,
+        |_| Ok(json!({"reply": "pong from custom SPI"})),
+    ) else {
+        panic!("custom SPI run");
+    };
+    assert_eq!(report.final_answer, "pong from custom SPI");
 }
