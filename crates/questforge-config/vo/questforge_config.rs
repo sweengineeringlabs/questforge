@@ -257,6 +257,228 @@ impl Default for SigningConfig {
     }
 }
 
+/// XR player locomotion mode declared in `specs/*_xr.yaml`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LocomotionMode {
+    /// Stationary / room-scale only.
+    None,
+    /// Comfort arc teleportation.
+    #[default]
+    Teleport,
+    /// Continuous thumbstick movement.
+    Smooth,
+}
+
+/// Player locomotion settings for an XR scene.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LocomotionSpec {
+    /// Locomotion mode (`none`, `teleport`, `smooth`).
+    pub mode: LocomotionMode,
+    /// Snap-turn angle in degrees (`15`, `30`, `45`, `60`, `90`).
+    pub snap_turn_deg: u32,
+}
+
+impl Default for LocomotionSpec {
+    fn default() -> Self {
+        Self {
+            mode: LocomotionMode::Teleport,
+            snap_turn_deg: 45,
+        }
+    }
+}
+
+/// Supported 3D XR interactable primitives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InteractableKind {
+    /// Physics/hand/controller grabbable object.
+    Grabbable,
+    /// Direct index-finger poke button.
+    PokeButton,
+    /// Ray-cast interactive surface.
+    RayPanel,
+    /// World-locked persistent spatial anchor.
+    SpatialAnchor,
+}
+
+/// Declarative 3D interactable definition in `specs/*_xr.yaml`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InteractableSpec {
+    /// Unique identifier within the scene (snake_case).
+    pub id: String,
+    /// Interaction primitive kind.
+    pub kind: InteractableKind,
+    /// Allow simultaneous two-handed manipulation.
+    #[serde(default)]
+    pub two_handed: bool,
+    /// Controller haptic feedback intensity (`0`..=`100`).
+    #[serde(default = "default_haptic_intensity")]
+    pub haptic_intensity: u8,
+    /// C# / C++ handler method name on `I<Scene>XrActions` (PascalCase).
+    pub on_activate: String,
+}
+
+const fn default_haptic_intensity() -> u8 {
+    50
+}
+
+/// Interactive button/action inside a spatial UI panel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelActionSpec {
+    /// Unique action identifier within the panel (snake_case).
+    pub id: String,
+    /// Display label rendered on the spatial UI button.
+    pub label: String,
+    /// C# / C++ handler method name on `I<Scene>XrActions` (PascalCase).
+    pub handler: String,
+}
+
+/// Declarative world-space or head-locked spatial UI canvas in `specs/*_xr.yaml`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpatialPanelSpec {
+    /// Unique panel identifier (snake_case).
+    pub id: String,
+    /// Panel header title.
+    pub title: String,
+    /// Spawn distance from the user's HMD in centimeters (`50`..=`500`).
+    #[serde(default = "default_panel_distance_cm")]
+    pub distance_cm: u32,
+    /// Smoothly follow user head yaw.
+    #[serde(default)]
+    pub follow_head: bool,
+    /// Interactive buttons exposed by this panel.
+    #[serde(default)]
+    pub actions: Vec<PanelActionSpec>,
+}
+
+const fn default_panel_distance_cm() -> u32 {
+    150
+}
+
+/// Declarative XR scene & interaction specification (`specs/*_xr.yaml`) consumed by `quest sync`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XrSceneSpec {
+    /// PascalCase scene identifier (e.g. `MainArena`).
+    pub scene: String,
+    /// Player locomotion configuration.
+    #[serde(default)]
+    pub locomotion: LocomotionSpec,
+    /// 3D interactables in the scene.
+    #[serde(default)]
+    pub interactables: Vec<InteractableSpec>,
+    /// Spatial UI panels in the scene.
+    #[serde(default)]
+    pub spatial_panels: Vec<SpatialPanelSpec>,
+}
+
+impl XrSceneSpec {
+    /// Parses and validates an `XrSceneSpec` from YAML text.
+    pub fn from_yaml_str(yaml: &str) -> Result<Self, ConfigError> {
+        let spec: Self = serde_yaml::from_str(yaml)?;
+        spec.validate()?;
+        Ok(spec)
+    }
+
+    /// Loads and validates an `XrSceneSpec` from a YAML file path.
+    pub fn load_from_file(path: &Path) -> Result<Self, ConfigError> {
+        let raw = fs::read_to_string(path).map_err(|source| ConfigError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        Self::from_yaml_str(&raw)
+    }
+
+    /// Validates scene name, locomotion, interactable IDs, haptic bounds, and handler identifiers.
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if !is_valid_pascal_identifier(&self.scene) {
+            return Err(ConfigError::Validation {
+                field: "scene",
+                message: "must be a valid PascalCase identifier (e.g. MainArena)".to_string(),
+            });
+        }
+        if !matches!(self.locomotion.snap_turn_deg, 15 | 30 | 45 | 60 | 90) {
+            return Err(ConfigError::Validation {
+                field: "locomotion.snap_turn_deg",
+                message: "must be one of 15, 30, 45, 60, or 90".to_string(),
+            });
+        }
+        for item in &self.interactables {
+            if !is_valid_snake_identifier(&item.id) {
+                return Err(ConfigError::Validation {
+                    field: "interactables.id",
+                    message: format!("'{}' must be snake_case", item.id),
+                });
+            }
+            if item.haptic_intensity > 100 {
+                return Err(ConfigError::Validation {
+                    field: "interactables.haptic_intensity",
+                    message: "must be between 0 and 100".to_string(),
+                });
+            }
+            if !is_valid_pascal_identifier(&item.on_activate) {
+                return Err(ConfigError::Validation {
+                    field: "interactables.on_activate",
+                    message: format!(
+                        "'{}' must be a PascalCase handler method name",
+                        item.on_activate
+                    ),
+                });
+            }
+        }
+        for panel in &self.spatial_panels {
+            if !is_valid_snake_identifier(&panel.id) {
+                return Err(ConfigError::Validation {
+                    field: "spatial_panels.id",
+                    message: format!("'{}' must be snake_case", panel.id),
+                });
+            }
+            if !(50..=500).contains(&panel.distance_cm) {
+                return Err(ConfigError::Validation {
+                    field: "spatial_panels.distance_cm",
+                    message: "must be between 50 and 500 cm".to_string(),
+                });
+            }
+            for act in &panel.actions {
+                if !is_valid_snake_identifier(&act.id) {
+                    return Err(ConfigError::Validation {
+                        field: "spatial_panels.actions.id",
+                        message: format!("'{}' must be snake_case", act.id),
+                    });
+                }
+                if !is_valid_pascal_identifier(&act.handler) {
+                    return Err(ConfigError::Validation {
+                        field: "spatial_panels.actions.handler",
+                        message: format!(
+                            "'{}' must be a PascalCase handler method name",
+                            act.handler
+                        ),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn is_valid_pascal_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_uppercase() && chars.all(|c| c.is_ascii_alphanumeric())
+}
+
+fn is_valid_snake_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_lowercase()
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
 impl QuestforgeConfig {
     /// Parses and validates a `quest_forge.yaml` string.
     pub fn from_yaml_str(yaml: &str) -> Result<Self, ConfigError> {

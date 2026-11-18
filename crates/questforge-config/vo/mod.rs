@@ -7,6 +7,8 @@
 mod questforge_config;
 
 pub use self::questforge_config::{
-    EngineKind, FoveationLevel, InputMode, MetaVrCliConfig, ProjectConfig, QuestDevice,
-    QuestforgeConfig, SdkConfig, SigningConfig, TargetsConfig, ToolchainConfig, XrFeaturesConfig,
+    EngineKind, FoveationLevel, InputMode, InteractableKind, InteractableSpec, LocomotionMode,
+    LocomotionSpec, MetaVrCliConfig, PanelActionSpec, ProjectConfig, QuestDevice, QuestforgeConfig,
+    SdkConfig, SigningConfig, SpatialPanelSpec, TargetsConfig, ToolchainConfig, XrFeaturesConfig,
+    XrSceneSpec,
 };

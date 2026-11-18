@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use questforge_config::{
-    EngineKind, FoveationLevel, InputMode, MetaVrCliConfig, ProjectConfig, QuestDevice,
-    QuestforgeConfig, SdkConfig, SigningConfig, TargetsConfig, ToolchainConfig, XrFeaturesConfig,
+    EngineKind, FoveationLevel, InputMode, InteractableKind, LocomotionMode, MetaVrCliConfig,
+    ProjectConfig, QuestDevice, QuestforgeConfig, SdkConfig, SigningConfig, TargetsConfig,
+    ToolchainConfig, XrFeaturesConfig, XrSceneSpec,
 };
 use serde::{Deserialize, Serialize};
 
@@ -126,8 +127,11 @@ impl ProjectScaffolder {
         };
 
         let yaml = serde_yaml::to_string(&cfg)?;
+        let starter_spec_yaml = starter_main_arena_xr_yaml();
+        let starter_spec = XrSceneSpec::from_yaml_str(&starter_spec_yaml)?;
         let mut files: Vec<(String, String)> = vec![
             ("quest_forge.yaml".to_string(), yaml),
+            ("specs/main_arena_xr.yaml".to_string(), starter_spec_yaml),
             (
                 "config/vocabulary.toml".to_string(),
                 minimal_vocabulary_toml(),
@@ -143,7 +147,22 @@ impl ProjectScaffolder {
             ("src/.gitkeep".to_string(), String::new()),
         ];
 
-        for (rel, content) in managed_sync_files(&cfg) {
+        match opts.engine {
+            EngineKind::Unity => {
+                files.push((
+                    "Assets/Scripts/MainArenaActions.cs".to_string(),
+                    starter_unity_actions_cs(),
+                ));
+            }
+            EngineKind::Unreal => {
+                files.push((
+                    "Source/QuestForge/MainArenaActions.h".to_string(),
+                    starter_unreal_actions_h(),
+                ));
+            }
+        }
+
+        for (rel, content) in managed_sync_files(&cfg, &[starter_spec]) {
             files.push((rel, content));
         }
 
@@ -161,11 +180,12 @@ impl ProjectScaffolder {
         })
     }
 
-    /// Synchronizes declarative `quest_forge.yaml` settings into engine manifests,
-    /// `AndroidManifest.xml`, and generated runtime bootstrap files (`quest sync`).
+    /// Synchronizes declarative `quest_forge.yaml` and `specs/*_xr.yaml` settings into engine manifests,
+    /// `AndroidManifest.xml`, generated runtime bootstrap files, and scene `*.gen.*` components (`quest sync`).
     pub fn sync_project(project_dir: &Path) -> Result<SyncReport, InitError> {
         let cfg = QuestforgeConfig::load_from_dir(project_dir)?;
-        let managed = managed_sync_files(&cfg);
+        let specs = load_scene_specs(project_dir)?;
+        let managed = managed_sync_files(&cfg, &specs);
         let mut synced_files = Vec::with_capacity(managed.len());
 
         for (rel, content) in managed {
@@ -181,12 +201,14 @@ impl ProjectScaffolder {
         })
     }
 
-    /// Runs sub-second static source checks (`QF-SYNC-001`, `QF-VRC-001`, `QF-PERF-001`)
+    /// Runs sub-second static source checks (`QF-SPEC-001`, `QF-SYNC-001`, `QF-VRC-001`, `QF-PERF-001`)
     /// on `project_dir` (`quest check`).
     pub fn check_project(project_dir: &Path) -> Result<SourceCheckReport, InitError> {
         let cfg = QuestforgeConfig::load_from_dir(project_dir)?;
+        let (spec_finding, specs) = check_scene_specs(project_dir);
         let findings = vec![
-            check_sync_drift(project_dir, &cfg),
+            spec_finding,
+            check_sync_drift(project_dir, &cfg, &specs),
             check_source_vrc(project_dir, &cfg),
             check_xr_perf_patterns(project_dir),
         ];
@@ -200,7 +222,65 @@ impl ProjectScaffolder {
     }
 }
 
-fn managed_sync_files(cfg: &QuestforgeConfig) -> Vec<(String, String)> {
+fn load_scene_specs(project_dir: &Path) -> Result<Vec<XrSceneSpec>, InitError> {
+    let specs_dir = project_dir.join("specs");
+    if !specs_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    let entries = fs::read_dir(&specs_dir).map_err(|source| InitError::Io {
+        path: specs_dir,
+        source,
+    })?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with("_xr.yaml"))
+        {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    let mut specs = Vec::with_capacity(paths.len());
+    for path in paths {
+        specs.push(XrSceneSpec::load_from_file(&path)?);
+    }
+    Ok(specs)
+}
+
+fn check_scene_specs(project_dir: &Path) -> (SourceFinding, Vec<XrSceneSpec>) {
+    match load_scene_specs(project_dir) {
+        Ok(specs) => (
+            SourceFinding {
+                code: "QF-SPEC-001".to_string(),
+                name: "Declarative XR Scene Specs".to_string(),
+                passed: true,
+                message: format!(
+                    "Validated {} declarative XR scene spec(s) under specs/*_xr.yaml",
+                    specs.len()
+                ),
+                remediation: None,
+            },
+            specs,
+        ),
+        Err(err) => (
+            SourceFinding {
+                code: "QF-SPEC-001".to_string(),
+                name: "Declarative XR Scene Specs".to_string(),
+                passed: false,
+                message: err.to_string(),
+                remediation: Some(
+                    "Fix validation errors in specs/*_xr.yaml and run `quest sync`.".to_string(),
+                ),
+            },
+            Vec::new(),
+        ),
+    }
+}
+
+fn managed_sync_files(cfg: &QuestforgeConfig, specs: &[XrSceneSpec]) -> Vec<(String, String)> {
     let engine_ver =
         cfg.project
             .engine_version
@@ -210,7 +290,7 @@ fn managed_sync_files(cfg: &QuestforgeConfig) -> Vec<(String, String)> {
                 EngineKind::Unreal => DEFAULT_UNREAL_VERSION.to_string(),
             });
 
-    match cfg.project.engine {
+    let mut files = match cfg.project.engine {
         EngineKind::Unity => vec![
             (
                 "ProjectSettings/ProjectVersion.txt".to_string(),
@@ -251,11 +331,34 @@ fn managed_sync_files(cfg: &QuestforgeConfig) -> Vec<(String, String)> {
                 generate_unreal_bootstrap_h(cfg),
             ),
         ],
+    };
+
+    for spec in specs {
+        match cfg.project.engine {
+            EngineKind::Unity => {
+                files.push((
+                    format!("Assets/Generated/{}XrScene.gen.cs", spec.scene),
+                    generate_unity_scene_cs(spec),
+                ));
+            }
+            EngineKind::Unreal => {
+                files.push((
+                    format!("Source/QuestForge/{}XrScene.gen.h", spec.scene),
+                    generate_unreal_scene_h(spec),
+                ));
+            }
+        }
     }
+
+    files
 }
 
-fn check_sync_drift(project_dir: &Path, cfg: &QuestforgeConfig) -> SourceFinding {
-    let expected = managed_sync_files(cfg);
+fn check_sync_drift(
+    project_dir: &Path,
+    cfg: &QuestforgeConfig,
+    specs: &[XrSceneSpec],
+) -> SourceFinding {
+    let expected = managed_sync_files(cfg, specs);
     let mut drifted = Vec::new();
     for (rel, expected_content) in expected {
         let path = project_dir.join(&rel);
@@ -649,6 +752,174 @@ fn generate_unreal_bootstrap_h(cfg: &QuestforgeConfig) -> String {
         passthrough = cfg.xr_features.passthrough,
         anchors = cfg.xr_features.spatial_anchors,
     )
+}
+
+fn locomotion_label(mode: LocomotionMode) -> &'static str {
+    match mode {
+        LocomotionMode::None => "none",
+        LocomotionMode::Teleport => "teleport",
+        LocomotionMode::Smooth => "smooth",
+    }
+}
+
+fn interactable_kind_label(kind: InteractableKind) -> &'static str {
+    match kind {
+        InteractableKind::Grabbable => "grabbable",
+        InteractableKind::PokeButton => "poke_button",
+        InteractableKind::RayPanel => "ray_panel",
+        InteractableKind::SpatialAnchor => "spatial_anchor",
+    }
+}
+
+fn collect_scene_handlers(spec: &XrSceneSpec) -> Vec<(String, String)> {
+    let mut actions = Vec::new();
+    for item in &spec.interactables {
+        actions.push((item.id.clone(), item.on_activate.clone()));
+    }
+    for panel in &spec.spatial_panels {
+        for act in &panel.actions {
+            actions.push((act.id.clone(), act.handler.clone()));
+        }
+    }
+    actions
+}
+
+fn generate_unity_scene_cs(spec: &XrSceneSpec) -> String {
+    let scene = &spec.scene;
+    let loco = locomotion_label(spec.locomotion.mode);
+    let snap = spec.locomotion.snap_turn_deg;
+    let handlers = collect_scene_handlers(spec);
+
+    let mut iface_methods = String::new();
+    let mut dispatch_cases = String::new();
+    for (id, method) in &handlers {
+        iface_methods.push_str(&format!("        void {method}();\n"));
+        dispatch_cases.push_str(&format!(
+            "                case \"{id}\":\n                    _handler?.{method}();\n                    return true;\n"
+        ));
+    }
+
+    let mut interactable_rows = String::new();
+    for item in &spec.interactables {
+        let kind = interactable_kind_label(item.kind);
+        interactable_rows.push_str(&format!(
+            "            new InteractableDescriptor(\"{id}\", \"{kind}\", {two_handed}, {haptic}, \"{handler}\"),\n",
+            id = item.id,
+            two_handed = item.two_handed,
+            haptic = item.haptic_intensity,
+            handler = item.on_activate,
+        ));
+    }
+
+    let mut panel_rows = String::new();
+    for panel in &spec.spatial_panels {
+        panel_rows.push_str(&format!(
+            "            new SpatialPanelDescriptor(\"{id}\", \"{title}\", {dist}, {follow}),\n",
+            id = panel.id,
+            title = panel.title,
+            dist = panel.distance_cm,
+            follow = panel.follow_head,
+        ));
+    }
+
+    format!(
+        "// AUTO-GENERATED BY `quest sync` FROM specs/*_xr.yaml. DO NOT EDIT BY HAND.\nusing UnityEngine;\n\nnamespace QuestForge.Generated\n{{\n    public interface I{scene}XrActions\n    {{\n{iface_methods}    }}\n\n    public readonly struct InteractableDescriptor\n    {{\n        public readonly string Id;\n        public readonly string Kind;\n        public readonly bool TwoHanded;\n        public readonly byte HapticIntensity;\n        public readonly string Handler;\n\n        public InteractableDescriptor(string id, string kind, bool twoHanded, byte hapticIntensity, string handler)\n        {{\n            Id = id;\n            Kind = kind;\n            TwoHanded = twoHanded;\n            HapticIntensity = hapticIntensity;\n            Handler = handler;\n        }}\n    }}\n\n    public readonly struct SpatialPanelDescriptor\n    {{\n        public readonly string Id;\n        public readonly string Title;\n        public readonly uint DistanceCm;\n        public readonly bool FollowHead;\n\n        public SpatialPanelDescriptor(string id, string title, uint distanceCm, bool followHead)\n        {{\n            Id = id;\n            Title = title;\n            DistanceCm = distanceCm;\n            FollowHead = followHead;\n        }}\n    }}\n\n    public sealed class {scene}XrController : MonoBehaviour\n    {{\n        public const string SceneName = \"{scene}\";\n        public const string LocomotionMode = \"{loco}\";\n        public const int SnapTurnDegrees = {snap};\n\n        public static readonly InteractableDescriptor[] Interactables = new[]\n        {{\n{interactable_rows}        }};\n\n        public static readonly SpatialPanelDescriptor[] SpatialPanels = new[]\n        {{\n{panel_rows}        }};\n\n        private I{scene}XrActions _handler;\n\n        private void Awake()\n        {{\n            _handler = GetComponent<I{scene}XrActions>();\n        }}\n\n        public void BindActions(I{scene}XrActions handler)\n        {{\n            _handler = handler;\n        }}\n\n        public bool DispatchAction(string actionId)\n        {{\n            switch (actionId)\n            {{\n{dispatch_cases}                default:\n                    return false;\n            }}\n        }}\n    }}\n}}\n"
+    )
+}
+
+fn generate_unreal_scene_h(spec: &XrSceneSpec) -> String {
+    let scene = &spec.scene;
+    let loco = locomotion_label(spec.locomotion.mode);
+    let snap = spec.locomotion.snap_turn_deg;
+    let handlers = collect_scene_handlers(spec);
+
+    let mut virtual_methods = String::new();
+    let mut dispatch_branches = String::new();
+    for (id, method) in &handlers {
+        virtual_methods.push_str(&format!("        virtual void {method}() = 0;\n"));
+        dispatch_branches.push_str(&format!(
+            "        if (std::strcmp(ActionId, \"{id}\") == 0) {{ Handler.{method}(); return true; }}\n"
+        ));
+    }
+
+    format!(
+        "// AUTO-GENERATED BY `quest sync` FROM specs/*_xr.yaml. DO NOT EDIT BY HAND.\n#pragma once\n#include <cstring>\n\nnamespace QuestForgeGenerated\n{{\n    class I{scene}XrActions\n    {{\n    public:\n        virtual ~I{scene}XrActions() = default;\n{virtual_methods}    }};\n\n    struct F{scene}XrScene\n    {{\n        static constexpr const char* kSceneName = \"{scene}\";\n        static constexpr const char* kLocomotionMode = \"{loco}\";\n        static constexpr int kSnapTurnDegrees = {snap};\n\n        static bool DispatchAction(const char* ActionId, I{scene}XrActions& Handler)\n        {{\n{dispatch_branches}            return false;\n        }}\n    }};\n}}\n"
+    )
+}
+
+fn starter_main_arena_xr_yaml() -> String {
+    r#"scene: MainArena
+locomotion:
+  mode: teleport
+  snap_turn_deg: 45
+interactables:
+  - id: energy_core
+    kind: grabbable
+    two_handed: true
+    haptic_intensity: 80
+    on_activate: OnEnergyCoreGrabbed
+  - id: start_button
+    kind: poke_button
+    two_handed: false
+    haptic_intensity: 50
+    on_activate: OnStartButtonPoked
+spatial_panels:
+  - id: hud_panel
+    title: "Mission HUD"
+    distance_cm: 150
+    follow_head: true
+    actions:
+      - id: reset_arena
+        label: "Reset Arena"
+        handler: OnResetArena
+"#
+    .to_string()
+}
+
+fn starter_unity_actions_cs() -> String {
+    r#"using UnityEngine;
+using QuestForge.Generated;
+
+namespace QuestForge.App
+{
+    public sealed class MainArenaActions : MonoBehaviour, IMainArenaXrActions
+    {
+        public void OnEnergyCoreGrabbed()
+        {
+            Debug.Log("[MainArena] Energy core grabbed");
+        }
+
+        public void OnStartButtonPoked()
+        {
+            Debug.Log("[MainArena] Start button poked");
+        }
+
+        public void OnResetArena()
+        {
+            Debug.Log("[MainArena] Arena reset requested");
+        }
+    }
+}
+"#
+    .to_string()
+}
+
+fn starter_unreal_actions_h() -> String {
+    r#"#pragma once
+#include "MainArenaXrScene.gen.h"
+
+namespace QuestForgeApp
+{
+    class FMainArenaActions final : public QuestForgeGenerated::IMainArenaXrActions
+    {
+    public:
+        void OnEnergyCoreGrabbed() override {}
+        void OnStartButtonPoked() override {}
+        void OnResetArena() override {}
+    };
+}
+"#
+    .to_string()
 }
 
 fn unity_build_script_cs() -> String {

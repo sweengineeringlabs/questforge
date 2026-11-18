@@ -106,9 +106,14 @@ fn test_sync_and_check_project_detects_drift_and_perf_violations_happy() {
         force: false,
     };
     assert!(ProjectScaffolder::scaffold(&opts).is_ok());
+    assert!(target.join("specs/main_arena_xr.yaml").exists());
+    assert!(target
+        .join("Assets/Generated/MainArenaXrScene.gen.cs")
+        .exists());
+    assert!(target.join("Assets/Scripts/MainArenaActions.cs").exists());
 
     let initial_check = ProjectScaffolder::check_project(&target);
-    assert!(matches!(initial_check, Ok(ref r) if r.passed && r.findings.len() == 3));
+    assert!(matches!(initial_check, Ok(ref r) if r.passed && r.findings.len() == 4));
 
     assert!(fs::write(
         target.join("quest_forge.yaml"),

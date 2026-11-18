@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use questforge_config::{ConfigError, EngineKind, QuestDevice, QuestforgeConfig};
+use questforge_config::{ConfigError, EngineKind, QuestDevice, QuestforgeConfig, XrSceneSpec};
 use tempfile::TempDir;
 
 #[test]
@@ -206,6 +206,54 @@ xr_features:
         QuestforgeConfig::from_yaml_str(invalid_hz),
         Err(ConfigError::Validation {
             field: "xr_features.refresh_rate_hz",
+            ..
+        })
+    ));
+}
+
+#[test]
+fn test_parse_xr_scene_spec_and_validate_handlers_happy() {
+    let yaml = r#"
+scene: TrainingLab
+locomotion:
+  mode: teleport
+  snap_turn_deg: 45
+interactables:
+  - id: scalpel_tool
+    kind: grabbable
+    two_handed: false
+    haptic_intensity: 75
+    on_activate: OnScalpelPickedUp
+spatial_panels:
+  - id: checklist_hud
+    title: "Procedure Checklist"
+    distance_cm: 120
+    follow_head: true
+    actions:
+      - id: complete_step
+        label: "Complete Step"
+        handler: OnStepCompleted
+"#;
+    let parsed = XrSceneSpec::from_yaml_str(yaml);
+    assert!(matches!(
+        parsed,
+        Ok(ref spec)
+            if spec.scene == "TrainingLab"
+                && spec.interactables.len() == 1
+                && spec.spatial_panels.len() == 1
+    ));
+
+    let bad_handler = r#"
+scene: TrainingLab
+interactables:
+  - id: scalpel_tool
+    kind: grabbable
+    on_activate: not_pascal_case
+"#;
+    assert!(matches!(
+        XrSceneSpec::from_yaml_str(bad_handler),
+        Err(ConfigError::Validation {
+            field: "interactables.on_activate",
             ..
         })
     ));

@@ -147,27 +147,33 @@ quest ops deploy local-dev my-quest-app/dist/my-quest-app-0.1.0.apk
 quest ops logcat <serial> --out my-quest-app/dist/logcat.txt
 ```
 
-### XR Coding, Scene Authoring & Manifest Workflow
+### Declarative XR Codegen, Scene Authoring & Manifest Workflow (`quest sync` & `quest check`)
 
-During step 4 of the inner loop, developers write gameplay, interaction, and rendering code while keeping three project artifacts synchronized with `quest doctor` (`QD-001`, `QD-006`, `QD-009`) and `quest verify` (`QV-001`–`QV-006`).
+Like `machineweb` (`mweb`) and `swartch`, QuestForge eliminates boilerplate by generating engine manifests, `AndroidManifest.xml`, runtime XR startup code, and scene interaction controllers directly from `quest_forge.yaml` and `specs/*_xr.yaml`.
 
 ```mermaid
 flowchart TD
-    Manifest["quest_forge.yaml (Single Source of Truth)"] --> Unity["Unity C# (Assets/Scripts/ & Packages/manifest.json)"]
-    Manifest --> Unreal["Unreal C++ / Blueprints (Source/ & QuestApp.uproject)"]
-    Unity --> AndroidManifest["Assets/Plugins/Android/AndroidManifest.xml"]
-    Unreal --> AndroidManifest
-    Unity --> Builder["Assets/Editor/QuestForgeBuild.cs (IL2CPP + ARM64)"]
-    Unreal --> UAT["RunUAT BuildCookRun (ASTC + ARM64)"]
-    AndroidManifest --> VRC["Meta VRC Compliance (QV-003, QV-004, QV-005)"]
-    Builder --> APK["Signed Release APK"]
-    UAT --> APK
-    VRC --> APK
+    Manifest["quest_forge.yaml (xr_features, sdk, targets)"]
+    SceneSpec["specs/main_arena_xr.yaml (Locomotion, Interactables, Spatial Panels)"]
+    Sync["quest sync (Declarative XR Code Generator)"]
+    AndroidManifest["Assets/Plugins/Android/AndroidManifest.xml (Auto-Generated VRC XML)"]
+    Bootstrap["Assets/Generated/QuestForgeBootstrap.gen.cs (90/120Hz, Foveation, Passthrough)"]
+    SceneGen["Assets/Generated/MainArenaXrScene.gen.cs (IMainArenaXrActions + MainArenaXrController)"]
+    UserCode["Assets/Scripts/MainArenaActions.cs (Developer Implements Only IMainArenaXrActions)"]
+    Check["quest check (QF-SPEC-001, QF-SYNC-001, QF-VRC-001, QF-PERF-001)"]
+
+    Manifest --> Sync
+    SceneSpec --> Sync
+    Sync --> AndroidManifest
+    Sync --> Bootstrap
+    Sync --> SceneGen
+    SceneGen --> UserCode
+    AndroidManifest --> Check
+    Bootstrap --> Check
+    UserCode --> Check
 ```
 
-#### 1. Project Manifest (`quest_forge.yaml`)
-Every engine version, target Quest headset, SDK version, and signing variable is declared in `quest_forge.yaml` so `quest doctor` (`QD-001`, `QD-006`) can catch configuration drift immediately:
-
+#### 1. Declare Runtime Capabilities in `quest_forge.yaml`
 ```yaml
 version: "1"
 project:
@@ -177,50 +183,85 @@ project:
   engine_version: "2022.3.42f1"
 targets:
   devices: [quest2, quest3, quest3s, questpro]
-  min_android_api: 32
-  target_android_api: 34
+  min_sdk: 29
+  target_sdk: 32
 sdk:
   openxr: true
   meta_xr_sdk: "68.0.0"
+xr_features:
+  refresh_rate_hz: 90
+  input_modes: [controllers, hands]
+  passthrough: true
+  spatial_anchors: true
+  foveated_rendering: high
 ```
 
-#### 2. Writing Unity XR C# Code (`Assets/Scripts/` & `Assets/Editor/QuestForgeBuild.cs`)
-- **Runtime XR Scripts (`Assets/Scripts/QuestRigController.cs`):** Write OpenXR / Meta XR SDK (`com.meta.xr.sdk.all`, `com.unity.xr.openxr`) scripts targeting 72/90/120 Hz display refresh rates, controller/hand-tracking input, and passthrough layers:
-  ```csharp
-  using UnityEngine;
-  using UnityEngine.XR;
+#### 2. Declare Scene Interactables & Spatial UI in `specs/main_arena_xr.yaml`
+```yaml
+scene: MainArena
+locomotion:
+  mode: teleport
+  snap_turn_deg: 45
+interactables:
+  - id: energy_core
+    kind: grabbable
+    two_handed: true
+    haptic_intensity: 80
+    on_activate: OnEnergyCoreGrabbed
+  - id: start_button
+    kind: poke_button
+    two_handed: false
+    haptic_intensity: 50
+    on_activate: OnStartButtonPoked
+spatial_panels:
+  - id: hud_panel
+    title: "Mission HUD"
+    distance_cm: 150
+    follow_head: true
+    actions:
+      - id: reset_arena
+        label: "Reset Arena"
+        handler: OnResetArena
+```
 
-  namespace MyQuestApp
-  {
-      public sealed class QuestRigController : MonoBehaviour
-      {
-          [SerializeField] private float targetRefreshRate = 90f;
+#### 3. Run `quest sync` (Auto-Generates All Boilerplate)
+Running `quest sync` generates and locks:
+- **`Assets/Plugins/Android/AndroidManifest.xml`** (or `Build/Android/AndroidManifest.xml` for Unreal) — VRC-compliant XML with `android.hardware.vr.headtracking`, `com.oculus.supportedDevices`, `com.oculus.intent.category.VR`, `HAND_TRACKING`, `PASSTHROUGH`, and `USE_ANCHOR_API`.
+- **`Assets/Generated/QuestForgeBootstrap.gen.cs`** (or `Source/QuestForge/QuestForgeBootstrap.gen.h`) — Configures target frame rate, foveation, passthrough, and hand tracking automatically at startup.
+- **`Assets/Generated/MainArenaXrScene.gen.cs`** (or `Source/QuestForge/MainArenaXrScene.gen.h`) — Generates the strongly-typed `IMainArenaXrActions` interface, `InteractableDescriptor[]`, `SpatialPanelDescriptor[]`, and `MainArenaXrController : MonoBehaviour` (with zero per-frame allocations).
 
-          private void Start()
-          {
-              Application.targetFrameRate = Mathf.RoundToInt(targetRefreshRate);
-              Debug.Log($"[QuestForge] XR Device Active: {XRSettings.loadedDeviceName}");
-          }
-      }
-  }
-  ```
-- **Headless Build Hook (`Assets/Editor/QuestForgeBuild.cs`):** Scaffolded by `quest init` and invoked automatically by `quest ci` (`-batchmode -nographics -executeMethod QuestForge.Build.BuildQuestApk`). It enforces `ScriptingImplementation.IL2CPP` and `AndroidArchitecture.ARM64` so the output binary always satisfies `QV-003` (`arm64-v8a` ABI compliance).
+#### 4. Implement Only Your Action Callbacks (`Assets/Scripts/MainArenaActions.cs`)
+The developer never touches `AndroidManifest.xml` or low-level XR setup—only implementing the generated interface:
+```csharp
+using UnityEngine;
+using QuestForge.Generated;
 
-#### 3. Writing Unreal Engine C++ / Blueprints (`QuestApp.uproject`)
-- Enable the `OpenXR` and `MetaXR` plugins in `QuestApp.uproject` and configure `DefaultEngine.ini` for Vulkan / Mobile Multi-View and ASTC texture compression (`Android_ASTC`).
-- `quest ci` invokes `RunUAT BuildCookRun -platform=Android -cookflavor=ASTC -clientconfig=Shipping` to compile C++ modules and cook `.pak` assets into a signed APK.
+namespace QuestForge.App
+{
+    public sealed class MainArenaActions : MonoBehaviour, IMainArenaXrActions
+    {
+        public void OnEnergyCoreGrabbed()
+        {
+            Debug.Log("[MainArena] Energy core grabbed");
+        }
 
-#### 4. Authoring a VRC-Compliant `AndroidManifest.xml`
-To pass `QV-004` (Meta VRC Manifest Policy) and `QV-005` (Permissions Audit) on the first try:
-- Set `package="com.studio.myquestapp"` matching `project.package_id` in `quest_forge.yaml`.
-- Ensure `android:debuggable="false"` on `<application>` for release builds.
-- Declare `<uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />`.
-- Include the Horizon OS VR launch category `<category android:name="com.oculus.intent.category.VR" />`.
-- Avoid unapproved sensitive Android permissions (`READ_CONTACTS`, `READ_SMS`, `ACCESS_FINE_LOCATION`, `SYSTEM_ALERT_WINDOW`).
+        public void OnStartButtonPoked()
+        {
+            Debug.Log("[MainArena] Start button poked");
+        }
 
-#### 5. Enforcing Repository Architecture While Coding (`swartch`)
-Before committing code changes, run the repository architecture check (`QD-009`) against `config/vocabulary.toml`:
+        public void OnResetArena()
+        {
+            Debug.Log("[MainArena] Arena reset requested");
+        }
+    }
+}
+```
+
+#### 5. Verify with `quest check` and `swartch`
+Before building an APK, run `quest check` to verify specs, sync state, VRC rules, and VR frame budgets in milliseconds:
 ```pwsh
+quest check --project-dir my-quest-app
 swartch --vocabulary config/vocabulary.toml .
 ```
 
