@@ -1,0 +1,4 @@
+[folders]
+source = "src"
+tests  = "tests"
+companions = ["docs", "tests", "scripts", "configs"]

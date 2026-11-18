@@ -1,0 +1,37 @@
+scene: OrbitArena
+locomotion:
+  mode: teleport
+  snap_turn_deg: 45
+interactables:
+  - id: pulse_orb
+    kind: grabbable
+    two_handed: false
+    haptic_intensity: 85
+    on_activate: OnPulseOrbGrabbed
+  - id: shield_emitter
+    kind: grabbable
+    two_handed: true
+    haptic_intensity: 95
+    on_activate: OnShieldActivated
+  - id: launch_pad
+    kind: poke_button
+    two_handed: false
+    haptic_intensity: 60
+    on_activate: OnWaveStarted
+  - id: arena_anchor
+    kind: spatial_anchor
+    two_handed: false
+    haptic_intensity: 40
+    on_activate: OnAnchorLocked
+spatial_panels:
+  - id: mission_hud
+    title: "Orbit Pulse HUD"
+    distance_cm: 140
+    follow_head: true
+    actions:
+      - id: toggle_passthrough
+        label: "Toggle MR Passthrough"
+        handler: OnTogglePassthrough
+      - id: reset_match
+        label: "Reset Match"
+        handler: OnResetMatch

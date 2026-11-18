@@ -1,0 +1,34 @@
+version: "1"
+project:
+  name: orbit-pulse-vr
+  package_id: com.swelabs.orbitpulsevr
+  engine: rust
+  engine_version: "1.100.0"
+targets:
+  devices:
+    - quest2
+    - quest3
+    - quest3s
+    - questpro
+  min_sdk: 29
+  target_sdk: 34
+  architecture: arm64-v8a
+toolchain:
+  jdk: "17"
+  android_ndk: 23.1.7779620
+  android_build_tools: 34.0.0
+  metavr_cli:
+    adb: 35.0.2
+sdk:
+  openxr: true
+xr_features:
+  refresh_rate_hz: 120
+  input_modes:
+    - controllers
+    - hands
+  passthrough: true
+  spatial_anchors: true
+  foveated_rendering: high
+signing:
+  keystore_env: QUEST_KEYSTORE_PATH
+  alias_env: QUEST_KEY_ALIAS
