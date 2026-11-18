@@ -8,7 +8,7 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
-use questforge_mcp::{AgentGoal, AgentOptions, QuestMcpServer, QuestXrAgent};
+use questforge_mcp::{AgentGoal, AgentOptions, LlmAgentOptions, QuestMcpServer, QuestXrAgent};
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
@@ -290,9 +290,24 @@ struct AgentArgs {
     /// Release version string
     #[arg(long, default_value = "1.0.0")]
     release_version: String,
-    /// Autonomous goal to execute
+    /// Autonomous goal to execute (used when --prompt is not set)
     #[arg(long, value_enum, default_value_t = CliAgentGoal::Release)]
     goal: CliAgentGoal,
+    /// Optional natural-language prompt to run in LLM ReAct mode via `quest mcp`
+    #[arg(long)]
+    prompt: Option<String>,
+    /// OpenAI-compatible chat completions URL (or QUESTFORGE_LLM_URL env var)
+    #[arg(long)]
+    llm_url: Option<String>,
+    /// LLM model name (or QUESTFORGE_LLM_MODEL env var)
+    #[arg(long)]
+    model: Option<String>,
+    /// Environment variable holding the LLM Bearer API key
+    #[arg(long, default_value = "QUESTFORGE_LLM_API_KEY")]
+    api_key_env: String,
+    /// Maximum ReAct turns in LLM mode
+    #[arg(long, default_value_t = 8)]
+    max_turns: usize,
     /// Plan build without invoking engine compiler
     #[arg(long)]
     dry_run: bool,
@@ -821,6 +836,54 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         eprintln!("quest agent failed: unable to locate current quest executable");
         return ExitCode::FAILURE;
     };
+
+    if let Some(prompt) = args.prompt {
+        let llm_url = args
+            .llm_url
+            .or_else(|| std::env::var("QUESTFORGE_LLM_URL").ok())
+            .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
+        let model = args
+            .model
+            .or_else(|| std::env::var("QUESTFORGE_LLM_MODEL").ok())
+            .unwrap_or_else(|| "gpt-4o-mini".to_string());
+        let api_key = std::env::var(&args.api_key_env).unwrap_or_default();
+        let llm_opts = LlmAgentOptions {
+            project_dir: args.project_dir,
+            prompt,
+            llm_url,
+            model,
+            api_key,
+            max_turns: args.max_turns,
+        };
+        return match QuestXrAgent::run_llm_stdio_client(&quest_bin, &llm_opts) {
+            Ok(report) => {
+                if args.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&report).unwrap_or_default()
+                    );
+                } else {
+                    println!(
+                        "QuestXrAgent LLM finished (model={}, tools={}, steps={}):",
+                        report.model,
+                        report.discovered_tools.len(),
+                        report.steps.len()
+                    );
+                    for s in &report.steps {
+                        let badge = if s.ok { "OK" } else { "ERR" };
+                        println!("  {}. [{}] {} -> {}", s.step, badge, s.tool, s.summary);
+                    }
+                    println!("\n{}", report.final_answer);
+                }
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("quest agent (LLM) failed: {err}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
     let opts = AgentOptions {
         project_dir: args.project_dir,
         output_dir: args.output_dir,

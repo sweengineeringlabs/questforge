@@ -66,6 +66,36 @@ pub struct AgentRunReport {
     pub passed: bool,
 }
 
+/// Configuration for running [`QuestXrAgent`] in natural-language LLM ReAct mode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LlmAgentOptions {
+    /// Workspace root passed to `quest mcp`.
+    pub project_dir: PathBuf,
+    /// Natural-language task prompt for the LLM agent.
+    pub prompt: String,
+    /// OpenAI-compatible chat completions endpoint (e.g. OpenAI, Ollama, Gemini).
+    pub llm_url: String,
+    /// Model identifier (e.g. `gpt-4o-mini`, `llama3.2`).
+    pub model: String,
+    /// Optional Bearer API key (may be empty for local Ollama).
+    pub api_key: String,
+    /// Maximum ReAct reasoning turns before stopping.
+    pub max_turns: usize,
+}
+
+/// Result emitted by an LLM-driven ReAct session routed through `quest mcp`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LlmRunReport {
+    /// Model used.
+    pub model: String,
+    /// MCP tool names discovered from `tools/list`.
+    pub discovered_tools: Vec<String>,
+    /// Tool calls executed through `quest mcp`.
+    pub steps: Vec<AgentStepLog>,
+    /// Final natural-language response from the LLM.
+    pub final_answer: String,
+}
+
 /// Real coded autonomous XR DevOps agent that communicates with `quest mcp` over JSON-RPC 2.0.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct QuestXrAgent;
@@ -97,6 +127,166 @@ impl QuestXrAgent {
         let server = QuestMcpServer::new(opts.project_dir.clone());
         let mut transport = InProcessRpcTransport { server, next_id: 1 };
         Self::execute_loop(&mut transport, opts)
+    }
+
+    /// Spawns `<quest_bin> mcp --workspace-root <project_dir>` and runs an LLM ReAct loop,
+    /// routing every LLM `tool_call` through `quest mcp` over JSON-RPC 2.0.
+    pub fn run_llm_stdio_client(
+        quest_bin: &Path,
+        opts: &LlmAgentOptions,
+    ) -> Result<LlmRunReport, McpError> {
+        let mut child = Command::new(quest_bin)
+            .args(["mcp", "--workspace-root"])
+            .arg(&opts.project_dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()?;
+
+        let mut transport = StdioRpcTransport::from_child(&mut child)?;
+        let res = Self::execute_llm_loop(&mut transport, opts, |payload| {
+            let mut req = ureq::post(&opts.llm_url).set("Content-Type", "application/json");
+            if !opts.api_key.trim().is_empty() {
+                req = req.set("Authorization", &format!("Bearer {}", opts.api_key));
+            }
+            let resp = req
+                .send_string(&payload.to_string())
+                .map_err(|err| std::io::Error::other(format!("LLM HTTP error: {err}")))?;
+            let raw = resp
+                .into_string()
+                .map_err(|err| std::io::Error::other(format!("LLM read error: {err}")))?;
+            Ok(serde_json::from_str(&raw)?)
+        });
+        drop(transport);
+        let _ = child.wait();
+        res
+    }
+
+    /// Runs the LLM ReAct loop in-process using a custom chat-completion callback (for tests).
+    pub fn run_llm_in_process_with_completer<F>(
+        opts: &LlmAgentOptions,
+        completer: F,
+    ) -> Result<LlmRunReport, McpError>
+    where
+        F: FnMut(&Value) -> Result<Value, McpError>,
+    {
+        let server = QuestMcpServer::new(opts.project_dir.clone());
+        let mut transport = InProcessRpcTransport { server, next_id: 1 };
+        Self::execute_llm_loop(&mut transport, opts, completer)
+    }
+
+    fn execute_llm_loop<T: RpcTransport, F>(
+        rpc: &mut T,
+        opts: &LlmAgentOptions,
+        mut completer: F,
+    ) -> Result<LlmRunReport, McpError>
+    where
+        F: FnMut(&Value) -> Result<Value, McpError>,
+    {
+        let _init = rpc.request("initialize", json!({}))?;
+        let tools_res = rpc.request("tools/list", json!({}))?;
+        let raw_tools = tools_res
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut discovered_tools = Vec::with_capacity(raw_tools.len());
+        let mut openai_tools = Vec::with_capacity(raw_tools.len());
+        for t in &raw_tools {
+            if let Some(name) = t.get("name").and_then(|v| v.as_str()) {
+                discovered_tools.push(name.to_string());
+                openai_tools.push(json!({
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": t.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                        "parameters": t.get("inputSchema").cloned().unwrap_or_else(|| json!({"type":"object"}))
+                    }
+                }));
+            }
+        }
+
+        let mut messages = vec![
+            json!({
+                "role": "system",
+                "content": "You are the QuestForge XR DevOps agent. Always use the provided MCP tools to inspect, sync, build, verify, or deploy Quest projects."
+            }),
+            json!({
+                "role": "user",
+                "content": opts.prompt
+            }),
+        ];
+        let mut steps = Vec::new();
+        let max_turns = opts.max_turns.max(1);
+
+        for _ in 0..max_turns {
+            let req_body = json!({
+                "model": opts.model,
+                "messages": messages,
+                "tools": openai_tools
+            });
+            let llm_resp = completer(&req_body)?;
+            let message = llm_resp
+                .get("choices")
+                .and_then(|c| c.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|choice| choice.get("message"))
+                .cloned()
+                .ok_or_else(|| std::io::Error::other("LLM response missing choices[0].message"))?;
+
+            let tool_calls = message
+                .get("tool_calls")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            if tool_calls.is_empty() {
+                let final_answer = message
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                return Ok(LlmRunReport {
+                    model: opts.model.clone(),
+                    discovered_tools,
+                    steps,
+                    final_answer,
+                });
+            }
+
+            messages.push(message.clone());
+            for tc in tool_calls {
+                let tc_id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("call_1");
+                let fn_name = tc
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let raw_args = tc
+                    .get("function")
+                    .and_then(|f| f.get("arguments"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}");
+                let parsed_args: Value =
+                    serde_json::from_str(raw_args).unwrap_or_else(|_| json!({}));
+
+                let (_ok, tool_out) = call_mcp_tool(rpc, &mut steps, fn_name, parsed_args)?;
+                messages.push(json!({
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": tool_out.to_string()
+                }));
+            }
+        }
+
+        Ok(LlmRunReport {
+            model: opts.model.clone(),
+            discovered_tools,
+            steps,
+            final_answer: "Reached max ReAct turns before receiving a final LLM summary."
+                .to_string(),
+        })
     }
 
     fn execute_loop<T: RpcTransport>(

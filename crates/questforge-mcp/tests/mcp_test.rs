@@ -4,7 +4,9 @@ use std::fs;
 
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
-use questforge_mcp::{AgentGoal, AgentOptions, JsonRpcRequest, QuestMcpServer, QuestXrAgent};
+use questforge_mcp::{
+    AgentGoal, AgentOptions, JsonRpcRequest, LlmAgentOptions, QuestMcpServer, QuestXrAgent,
+};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -151,4 +153,73 @@ fn test_xr_agent_in_process_heals_drift_and_completes_release_happy() {
                 && r.steps.iter().any(|s| s.tool == "build_project" && s.ok)
     ));
     assert!(proj.join("src/questforge_bootstrap_gen.rs").exists());
+}
+
+#[test]
+fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let proj = dir.path().join("llm-quest");
+    assert!(ProjectScaffolder::scaffold(&InitOptions {
+        target_dir: proj.clone(),
+        name: "llm-quest".to_string(),
+        package_id: "com.acme.llmquest".to_string(),
+        engine: EngineKind::Rust,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    })
+    .is_ok());
+
+    let mut turn = 0_usize;
+    let res = QuestXrAgent::run_llm_in_process_with_completer(
+        &LlmAgentOptions {
+            project_dir: proj.clone(),
+            prompt: "Check llm-quest and summarize status".to_string(),
+            llm_url: "http://localhost:11434/v1/chat/completions".to_string(),
+            model: "test-model".to_string(),
+            api_key: String::new(),
+            max_turns: 4,
+        },
+        move |_req_body| {
+            turn += 1;
+            if turn == 1 {
+                Ok(json!({
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": [{
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "check_source",
+                                    "arguments": format!("{{\"project_dir\":\"{}\"}}", proj.display().to_string().replace('\\', "\\\\"))
+                                }
+                            }]
+                        }
+                    }]
+                }))
+            } else {
+                Ok(json!({
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": "All 5 QuestForge static checks passed via MCP."
+                        }
+                    }]
+                }))
+            }
+        },
+    );
+
+    assert!(matches!(
+        res,
+        Ok(ref r)
+            if r.discovered_tools.len() == 11
+                && r.steps.len() == 1
+                && r.steps[0].tool == "check_source"
+                && r.steps[0].ok
+                && r.final_answer.contains("All 5 QuestForge static checks passed")
+    ));
 }

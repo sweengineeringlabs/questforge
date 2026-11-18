@@ -18,5 +18,6 @@ mod vo;
 pub use self::error::McpError;
 pub use self::vo::{
     AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, JsonRpcError, JsonRpcRequest,
-    JsonRpcResponse, McpToolDefinition, QuestMcpServer, QuestXrAgent,
+    JsonRpcResponse, LlmAgentOptions, LlmRunReport, McpToolDefinition, QuestMcpServer,
+    QuestXrAgent,
 };

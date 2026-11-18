@@ -59,6 +59,29 @@ flowchart LR
     Verify -->|"Enterprise OTA"| HMS["quest ops hms-push (Meta HMS / ManageXR / ArborXR)"]
 ```
 
+## AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)
+
+Every autonomous and LLM-driven agent interaction routes strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`):
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as quest agent (LLM ReAct Client)
+    participant MCP as quest mcp (JSON-RPC 2.0 Server)
+    participant LLM as LLM API (OpenAI / Gemini / Ollama)
+
+    User->>Agent: quest agent --prompt "Check, fix, build, and verify orbit-pulse-vr"
+    Agent->>MCP: tools/list (JSON-RPC 2.0)
+    MCP-->>Agent: 11 QuestForge MCP tool schemas
+    loop Until LLM returns final answer
+        Agent->>LLM: Chat completions (prompt + 11 MCP tool definitions + history)
+        LLM-->>Agent: tool_calls (e.g. check_source, sync_project, build_project, verify_release)
+        Agent->>MCP: tools/call (JSON-RPC 2.0)
+        MCP-->>Agent: Structured tool result (JSON)
+    end
+    Agent-->>User: Final summary + verified 100/100 result
+```
+
 ## Layer Responsibilities
 
 | Layer | Purpose | Rules (`swartch`) |
