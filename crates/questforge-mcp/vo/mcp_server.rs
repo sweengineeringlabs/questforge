@@ -9,7 +9,8 @@ use questforge_config::EngineKind;
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_ops::{
-    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, StoreUploadRequest,
+    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, OvrStoreAction,
+    OvrStoreRequest, StoreUploadRequest,
 };
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, VerifyOptions};
@@ -269,6 +270,26 @@ impl QuestMcpServer {
                     }
                 }),
             },
+            McpToolDefinition {
+                name: "ovr_store".to_string(),
+                description: "Execute any 1:1 ovr-platform-util Horizon Store operation (upload-quest-build, upload-dlc-build, upload-debug-symbols, set-release-channel-build, list-builds, download-build).".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "required": ["action", "app_id"],
+                    "properties": {
+                        "action": { "type": "string", "enum": ["upload-quest-build", "upload-dlc-build", "upload-debug-symbols", "set-release-channel-build", "list-builds", "download-build"] },
+                        "app_id": { "type": "string" },
+                        "apk_path": { "type": "string" },
+                        "channel": { "type": "string" },
+                        "build_id": { "type": "string" },
+                        "dir_path": { "type": "string" },
+                        "dlc_sku": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "app_secret_env": { "type": "string", "default": "QUEST_META_APP_SECRET" },
+                        "ovr_bin": { "type": "string" }
+                    }
+                }),
+            },
         ]
     }
 
@@ -387,6 +408,7 @@ impl QuestMcpServer {
             "publish_mdm" => call_publish_mdm(&args),
             "setup_toolchain" => call_setup_toolchain(&args),
             "upload_store" => call_upload_store(&args),
+            "ovr_store" => call_ovr_store(&args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -804,6 +826,71 @@ fn call_upload_store(args: &Value) -> Result<String, String> {
             channel,
             release_notes,
             ovr_bin,
+        },
+        &OpsEnv::System,
+    )
+    .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
+}
+
+fn call_ovr_store(args: &Value) -> Result<String, String> {
+    let action_raw = args
+        .get("action")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing action".to_string())?;
+    let action = match action_raw {
+        "upload-quest-build" => OvrStoreAction::UploadQuestBuild,
+        "upload-dlc-build" => OvrStoreAction::UploadDlcBuild,
+        "upload-debug-symbols" => OvrStoreAction::UploadDebugSymbols,
+        "set-release-channel-build" => OvrStoreAction::SetReleaseChannelBuild,
+        "list-builds" => OvrStoreAction::ListBuilds,
+        "download-build" => OvrStoreAction::DownloadBuild,
+        other => return Err(format!("unsupported ovr_store action: {other}")),
+    };
+    let app_id = args
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing app_id".to_string())?
+        .to_string();
+    let secret_env = args
+        .get("app_secret_env")
+        .and_then(|v| v.as_str())
+        .unwrap_or("QUEST_META_APP_SECRET");
+    let app_secret = std::env::var(secret_env).unwrap_or_default();
+
+    let receipt = FleetManager::execute_ovr_store(
+        &OvrStoreRequest {
+            action,
+            app_id,
+            app_secret,
+            apk_path: args
+                .get("apk_path")
+                .and_then(|v| v.as_str())
+                .map(PathBuf::from),
+            channel: args
+                .get("channel")
+                .and_then(|v| v.as_str())
+                .map(ToString::to_string),
+            build_id: args
+                .get("build_id")
+                .and_then(|v| v.as_str())
+                .map(ToString::to_string),
+            dir_path: args
+                .get("dir_path")
+                .and_then(|v| v.as_str())
+                .map(PathBuf::from),
+            dlc_sku: args
+                .get("dlc_sku")
+                .and_then(|v| v.as_str())
+                .map(ToString::to_string),
+            release_notes: args
+                .get("notes")
+                .and_then(|v| v.as_str())
+                .map(ToString::to_string),
+            ovr_bin: args
+                .get("ovr_bin")
+                .and_then(|v| v.as_str())
+                .map(PathBuf::from),
         },
         &OpsEnv::System,
     )

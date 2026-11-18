@@ -6,7 +6,7 @@ use std::path::Path;
 
 use questforge_ops::{
     AdbOutput, DeploymentRecord, FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider,
-    MockOpsEnv, OpsEnv, OpsError, StoreUploadRequest,
+    MockOpsEnv, OpsEnv, OpsError, OvrStoreAction, OvrStoreRequest, StoreUploadRequest,
 };
 use tempfile::TempDir;
 
@@ -252,4 +252,94 @@ fn test_store_upload_happy_and_missing_secret_error() {
         &env,
     );
     assert!(matches!(missing_secret, Err(OpsError::MdmFailed { .. })));
+}
+
+#[test]
+fn test_execute_ovr_store_all_six_actions_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let apk = dir.path().join("app.apk");
+    assert!(fs::write(&apk, b"apk").is_ok());
+    let env = OpsEnv::Mock(MockOpsEnv::default());
+
+    let cases = [
+        OvrStoreRequest {
+            action: OvrStoreAction::UploadQuestBuild,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: Some(apk),
+            channel: Some("ALPHA".to_string()),
+            build_id: None,
+            dir_path: Some(dir.path().to_path_buf()),
+            dlc_sku: None,
+            release_notes: None,
+            ovr_bin: None,
+        },
+        OvrStoreRequest {
+            action: OvrStoreAction::UploadDlcBuild,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: None,
+            channel: Some("ALPHA".to_string()),
+            build_id: None,
+            dir_path: Some(dir.path().to_path_buf()),
+            dlc_sku: Some("pack-1".to_string()),
+            release_notes: None,
+            ovr_bin: None,
+        },
+        OvrStoreRequest {
+            action: OvrStoreAction::UploadDebugSymbols,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: None,
+            channel: None,
+            build_id: Some("999".to_string()),
+            dir_path: Some(dir.path().to_path_buf()),
+            dlc_sku: None,
+            release_notes: None,
+            ovr_bin: None,
+        },
+        OvrStoreRequest {
+            action: OvrStoreAction::SetReleaseChannelBuild,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: None,
+            channel: Some("BETA".to_string()),
+            build_id: Some("999".to_string()),
+            dir_path: None,
+            dlc_sku: None,
+            release_notes: None,
+            ovr_bin: None,
+        },
+        OvrStoreRequest {
+            action: OvrStoreAction::ListBuilds,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: None,
+            channel: None,
+            build_id: None,
+            dir_path: None,
+            dlc_sku: None,
+            release_notes: None,
+            ovr_bin: None,
+        },
+        OvrStoreRequest {
+            action: OvrStoreAction::DownloadBuild,
+            app_id: "1439257382612621".to_string(),
+            app_secret: "sec".to_string(),
+            apk_path: None,
+            channel: None,
+            build_id: Some("999".to_string()),
+            dir_path: Some(dir.path().to_path_buf()),
+            dlc_sku: None,
+            release_notes: None,
+            ovr_bin: None,
+        },
+    ];
+
+    for req in cases {
+        let res = FleetManager::execute_ovr_store(&req, &env);
+        assert!(matches!(res, Ok(ref r) if r.action == req.action));
+    }
 }

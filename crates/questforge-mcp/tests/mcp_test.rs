@@ -43,7 +43,7 @@ fn test_mcp_initialize_and_tools_list_happy() {
                     .as_ref()
                     .and_then(|v| v.get("tools"))
                     .and_then(|t| t.as_array())
-                    .is_some_and(|arr| arr.len() == 13)
+                    .is_some_and(|arr| arr.len() == 14)
     ));
 }
 
@@ -151,7 +151,7 @@ fn test_xr_agent_in_process_heals_drift_and_completes_release_happy() {
         report,
         Ok(ref r)
             if r.passed
-                && r.discovered_tools.len() == 13
+                && r.discovered_tools.len() == 14
                 && r.steps.iter().any(|s| s.tool == "sync_project" && s.ok)
                 && r.steps.iter().any(|s| s.tool == "build_project" && s.ok)
     ));
@@ -219,7 +219,7 @@ fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
     assert!(matches!(
         res,
         Ok(ref r)
-            if r.discovered_tools.len() == 13
+            if r.discovered_tools.len() == 14
                 && r.steps.len() == 1
                 && r.steps[0].tool == "check_source"
                 && r.steps[0].ok

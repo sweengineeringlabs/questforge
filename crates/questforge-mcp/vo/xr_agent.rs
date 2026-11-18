@@ -102,6 +102,7 @@ impl AgentAudience {
                 "fleet_discover",
                 "publish_mdm",
                 "upload_store",
+                "ovr_store",
                 "check_source",
                 "search_docs",
             ],

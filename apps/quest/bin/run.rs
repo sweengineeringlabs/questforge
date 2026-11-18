@@ -14,7 +14,8 @@ use questforge_mcp::{
     QuestMcpServer, QuestXrAgent,
 };
 use questforge_ops::{
-    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, StoreUploadRequest,
+    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, OvrStoreAction,
+    OvrStoreRequest, StoreUploadRequest,
 };
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
@@ -491,6 +492,68 @@ enum OpsAction {
         #[arg(long)]
         ovr_bin: Option<PathBuf>,
     },
+    /// Execute any 1:1 `ovr-platform-util` Meta Horizon Store operation
+    Store {
+        /// Store operation (`upload-quest-build`, `upload-dlc-build`, `upload-debug-symbols`, `set-release-channel-build`, `list-builds`, `download-build`)
+        #[arg(long, value_enum)]
+        action: CliOvrStoreAction,
+        /// Meta Horizon App ID
+        #[arg(long)]
+        app_id: String,
+        /// Optional APK path (`upload-quest-build`)
+        #[arg(long)]
+        apk: Option<PathBuf>,
+        /// Optional release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`)
+        #[arg(long)]
+        channel: Option<String>,
+        /// Optional build ID (`set-release-channel-build`, `upload-debug-symbols`, `download-build`)
+        #[arg(long)]
+        build_id: Option<String>,
+        /// Optional directory path (debug symbols, DLC assets, or download destination)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Optional DLC SKU (`upload-dlc-build`)
+        #[arg(long)]
+        sku: Option<String>,
+        /// Optional release notes
+        #[arg(long)]
+        notes: Option<String>,
+        /// Environment variable holding the Meta Horizon App Secret
+        #[arg(long, default_value = "QUEST_META_APP_SECRET")]
+        app_secret_env: String,
+        /// Optional explicit path to `ovr-platform-util`
+        #[arg(long)]
+        ovr_bin: Option<PathBuf>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliOvrStoreAction {
+    #[value(name = "upload-quest-build")]
+    UploadQuestBuild,
+    #[value(name = "upload-dlc-build")]
+    UploadDlcBuild,
+    #[value(name = "upload-debug-symbols")]
+    UploadDebugSymbols,
+    #[value(name = "set-release-channel-build")]
+    SetReleaseChannelBuild,
+    #[value(name = "list-builds")]
+    ListBuilds,
+    #[value(name = "download-build")]
+    DownloadBuild,
+}
+
+impl From<CliOvrStoreAction> for OvrStoreAction {
+    fn from(value: CliOvrStoreAction) -> Self {
+        match value {
+            CliOvrStoreAction::UploadQuestBuild => Self::UploadQuestBuild,
+            CliOvrStoreAction::UploadDlcBuild => Self::UploadDlcBuild,
+            CliOvrStoreAction::UploadDebugSymbols => Self::UploadDebugSymbols,
+            CliOvrStoreAction::SetReleaseChannelBuild => Self::SetReleaseChannelBuild,
+            CliOvrStoreAction::ListBuilds => Self::ListBuilds,
+            CliOvrStoreAction::DownloadBuild => Self::DownloadBuild,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -1504,6 +1567,55 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 }
                 Err(err) => {
                     eprintln!("quest ops store-upload failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::Store {
+            action,
+            app_id,
+            apk,
+            channel,
+            build_id,
+            dir,
+            sku,
+            notes,
+            app_secret_env,
+            ovr_bin,
+        } => {
+            let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
+            let req = OvrStoreRequest {
+                action: action.into(),
+                app_id,
+                app_secret,
+                apk_path: apk,
+                channel,
+                build_id,
+                dir_path: dir,
+                dlc_sku: sku,
+                release_notes: notes,
+                ovr_bin,
+            };
+            match FleetManager::execute_ovr_store(&req, &env) {
+                Ok(receipt) => {
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&receipt).unwrap_or_default()
+                        );
+                    } else {
+                        println!(
+                            "Meta Store {} succeeded (app_id: {}, channel: {}, build_id: {})",
+                            receipt.action.as_subcommand(),
+                            receipt.app_id,
+                            receipt.channel.as_deref().unwrap_or("-"),
+                            receipt.build_id.as_deref().unwrap_or("-")
+                        );
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops store failed: {err}");
                     ExitCode::FAILURE
                 }
             }

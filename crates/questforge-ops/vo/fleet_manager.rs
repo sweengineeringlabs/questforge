@@ -256,6 +256,83 @@ pub struct HmsReleaseReceipt {
     pub apk_sha256: String,
 }
 
+/// Supported 1:1 `ovr-platform-util` Horizon Store operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OvrStoreAction {
+    /// `ovr-platform-util upload-quest-build`
+    UploadQuestBuild,
+    /// `ovr-platform-util upload-dlc-build`
+    UploadDlcBuild,
+    /// `ovr-platform-util upload-debug-symbols`
+    UploadDebugSymbols,
+    /// `ovr-platform-util set-release-channel-build`
+    SetReleaseChannelBuild,
+    /// `ovr-platform-util list-builds`
+    ListBuilds,
+    /// `ovr-platform-util download-build`
+    DownloadBuild,
+}
+
+impl OvrStoreAction {
+    /// Canonical `ovr-platform-util` subcommand name.
+    #[must_use]
+    pub const fn as_subcommand(self) -> &'static str {
+        match self {
+            Self::UploadQuestBuild => "upload-quest-build",
+            Self::UploadDlcBuild => "upload-dlc-build",
+            Self::UploadDebugSymbols => "upload-debug-symbols",
+            Self::SetReleaseChannelBuild => "set-release-channel-build",
+            Self::ListBuilds => "list-builds",
+            Self::DownloadBuild => "download-build",
+        }
+    }
+}
+
+/// Request for any 1:1 `ovr-platform-util` Horizon Store operation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OvrStoreRequest {
+    /// Store operation to execute.
+    pub action: OvrStoreAction,
+    /// Meta Horizon App ID.
+    pub app_id: String,
+    /// Meta Horizon App Secret.
+    pub app_secret: String,
+    /// Optional APK/asset file path (`upload-quest-build`, `upload-dlc-build`).
+    pub apk_path: Option<PathBuf>,
+    /// Optional release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`).
+    pub channel: Option<String>,
+    /// Optional build ID (`set-release-channel-build`, `download-build`, `upload-debug-symbols`).
+    pub build_id: Option<String>,
+    /// Optional directory path (debug symbols dir, assets dir, or download destination).
+    pub dir_path: Option<PathBuf>,
+    /// Optional DLC SKU (`upload-dlc-build`).
+    pub dlc_sku: Option<String>,
+    /// Optional release notes.
+    pub release_notes: Option<String>,
+    /// Optional explicit path to `ovr-platform-util`.
+    pub ovr_bin: Option<PathBuf>,
+}
+
+/// Receipt emitted after executing an `ovr-platform-util` Horizon Store operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OvrStoreReceipt {
+    /// Operation executed.
+    pub action: OvrStoreAction,
+    /// Meta Horizon App ID.
+    pub app_id: String,
+    /// Target channel if applicable.
+    pub channel: Option<String>,
+    /// Target build ID if applicable.
+    pub build_id: Option<String>,
+    /// SHA-256 hex digest of the uploaded file if applicable.
+    pub artifact_sha256: Option<String>,
+    /// `ovr-platform-util` binary invoked.
+    pub ovr_bin: PathBuf,
+    /// Raw stdout from `ovr-platform-util`.
+    pub stdout: String,
+}
+
 /// Request to upload a Quest APK directly to a Meta Horizon Store release channel via `ovr-platform-util`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoreUploadRequest {
@@ -655,72 +732,191 @@ impl FleetManager {
         req: &StoreUploadRequest,
         env: &OpsEnv,
     ) -> Result<StoreUploadReceipt, OpsError> {
+        let receipt = Self::execute_ovr_store(
+            &OvrStoreRequest {
+                action: OvrStoreAction::UploadQuestBuild,
+                app_id: req.app_id.clone(),
+                app_secret: req.app_secret.clone(),
+                apk_path: Some(req.apk_path.clone()),
+                channel: Some(req.channel.clone()),
+                build_id: None,
+                dir_path: None,
+                dlc_sku: None,
+                release_notes: req.release_notes.clone(),
+                ovr_bin: req.ovr_bin.clone(),
+            },
+            env,
+        )?;
+        Ok(StoreUploadReceipt {
+            app_id: receipt.app_id,
+            channel: receipt.channel.unwrap_or_default(),
+            apk_sha256: receipt.artifact_sha256.unwrap_or_default(),
+            ovr_bin: receipt.ovr_bin,
+            stdout: receipt.stdout,
+        })
+    }
+
+    /// Executes any 1:1 `ovr-platform-util` Horizon Store operation.
+    pub fn execute_ovr_store(
+        req: &OvrStoreRequest,
+        env: &OpsEnv,
+    ) -> Result<OvrStoreReceipt, OpsError> {
         let endpoint = format!(
             "https://developers.meta.com/vr/manage/applications/{}/release-channels/",
             req.app_id.trim()
         );
+        let store_err = |msg: &str| OpsError::MdmFailed {
+            provider: "meta-store".to_string(),
+            endpoint: endpoint.clone(),
+            message: msg.to_string(),
+        };
         if req.app_id.trim().is_empty() {
-            return Err(OpsError::MdmFailed {
-                provider: "meta-store".to_string(),
-                endpoint,
-                message: "missing Meta Horizon App ID".to_string(),
-            });
+            return Err(store_err("missing Meta Horizon App ID"));
         }
         if req.app_secret.trim().is_empty() {
-            return Err(OpsError::MdmFailed {
-                provider: "meta-store".to_string(),
-                endpoint,
-                message: "missing Meta Horizon App Secret".to_string(),
-            });
+            return Err(store_err("missing Meta Horizon App Secret"));
         }
-        if req.channel.trim().is_empty() {
-            return Err(OpsError::MdmFailed {
-                provider: "meta-store".to_string(),
-                endpoint,
-                message: "missing target release channel".to_string(),
-            });
-        }
-
-        let apk_bytes = fs::read(&req.apk_path).map_err(|source| OpsError::Io {
-            path: req.apk_path.clone(),
-            source,
-        })?;
-        let apk_sha256 = hex::encode(Sha256::digest(&apk_bytes));
-        let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
 
         let mut args = vec![
-            "upload-quest-build".to_string(),
+            req.action.as_subcommand().to_string(),
             "--app_id".to_string(),
             req.app_id.trim().to_string(),
             "--app_secret".to_string(),
             req.app_secret.trim().to_string(),
-            "--apk".to_string(),
-            req.apk_path.display().to_string(),
-            "--channel".to_string(),
-            req.channel.trim().to_string(),
         ];
+
+        let mut artifact_sha256 = None;
+        match req.action {
+            OvrStoreAction::UploadQuestBuild => {
+                let apk = req
+                    .apk_path
+                    .as_ref()
+                    .ok_or_else(|| store_err("missing --apk for upload-quest-build"))?;
+                let bytes = fs::read(apk).map_err(|source| OpsError::Io {
+                    path: apk.clone(),
+                    source,
+                })?;
+                artifact_sha256 = Some(hex::encode(Sha256::digest(&bytes)));
+                let channel = req
+                    .channel
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing target release channel"))?;
+                args.extend([
+                    "--apk".to_string(),
+                    apk.display().to_string(),
+                    "--channel".to_string(),
+                    channel.to_string(),
+                ]);
+                if let Some(dir) = &req.dir_path {
+                    args.extend(["--debug_symbols_dir".to_string(), dir.display().to_string()]);
+                }
+            }
+            OvrStoreAction::UploadDlcBuild => {
+                let sku = req
+                    .dlc_sku
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing --sku for upload-dlc-build"))?;
+                let dir = req
+                    .dir_path
+                    .as_ref()
+                    .ok_or_else(|| store_err("missing --dir for upload-dlc-build"))?;
+                args.extend([
+                    "--sku".to_string(),
+                    sku.to_string(),
+                    "--assets_dir".to_string(),
+                    dir.display().to_string(),
+                ]);
+                if let Some(ch) = req.channel.as_deref().filter(|s| !s.trim().is_empty()) {
+                    args.extend(["--channel".to_string(), ch.trim().to_string()]);
+                }
+            }
+            OvrStoreAction::UploadDebugSymbols => {
+                let build_id = req
+                    .build_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing --build-id for upload-debug-symbols"))?;
+                let dir = req
+                    .dir_path
+                    .as_ref()
+                    .ok_or_else(|| store_err("missing --dir for upload-debug-symbols"))?;
+                args.extend([
+                    "--build_id".to_string(),
+                    build_id.to_string(),
+                    "--debug_symbols_dir".to_string(),
+                    dir.display().to_string(),
+                ]);
+            }
+            OvrStoreAction::SetReleaseChannelBuild => {
+                let build_id = req
+                    .build_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing --build-id for set-release-channel-build"))?;
+                let channel = req
+                    .channel
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing --channel for set-release-channel-build"))?;
+                args.extend([
+                    "--build_id".to_string(),
+                    build_id.to_string(),
+                    "--channel".to_string(),
+                    channel.to_string(),
+                ]);
+            }
+            OvrStoreAction::ListBuilds => {
+                if let Some(ch) = req.channel.as_deref().filter(|s| !s.trim().is_empty()) {
+                    args.extend(["--channel".to_string(), ch.trim().to_string()]);
+                }
+            }
+            OvrStoreAction::DownloadBuild => {
+                let build_id = req
+                    .build_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| store_err("missing --build-id for download-build"))?;
+                let dir = req
+                    .dir_path
+                    .as_ref()
+                    .ok_or_else(|| store_err("missing --dir for download-build"))?;
+                args.extend([
+                    "--build_id".to_string(),
+                    build_id.to_string(),
+                    "--out".to_string(),
+                    dir.display().to_string(),
+                ]);
+            }
+        }
+
         if let Some(notes) = req
             .release_notes
             .as_deref()
             .filter(|n| !n.trim().is_empty())
         {
-            args.push("--notes".to_string());
-            args.push(notes.trim().to_string());
+            args.extend(["--notes".to_string(), notes.trim().to_string()]);
         }
 
+        let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
         let out = env.run_bin(&ovr_bin, &args)?;
         if !out.success {
-            return Err(OpsError::MdmFailed {
-                provider: "meta-store".to_string(),
-                endpoint,
-                message: out.stderr.trim().to_string(),
-            });
+            return Err(store_err(out.stderr.trim()));
         }
 
-        Ok(StoreUploadReceipt {
+        Ok(OvrStoreReceipt {
+            action: req.action,
             app_id: req.app_id.trim().to_string(),
-            channel: req.channel.trim().to_string(),
-            apk_sha256,
+            channel: req.channel.as_ref().map(|s| s.trim().to_string()),
+            build_id: req.build_id.as_ref().map(|s| s.trim().to_string()),
+            artifact_sha256,
             ovr_bin,
             stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
         })
