@@ -2,7 +2,9 @@
 
 use std::fs;
 
-use questforge_config::{ConfigError, EngineKind, QuestDevice, QuestforgeConfig, XrSceneSpec};
+use questforge_config::{
+    ConfigError, EngineKind, MdmTarget, QuestDevice, QuestforgeConfig, XrSceneSpec,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -257,4 +259,40 @@ interactables:
             ..
         })
     ));
+}
+
+#[test]
+fn test_parse_mdm_config_for_all_three_providers_happy() {
+    for (label, expected) in [
+        ("meta-hms", MdmTarget::MetaHms),
+        ("managexr", MdmTarget::ManageXr),
+        ("arborxr", MdmTarget::ArborXr),
+    ] {
+        let yaml = format!(
+            r#"
+version: "1"
+project:
+  name: mdm-app
+  package_id: com.acme.mdm
+  engine: rust
+mdm:
+  provider: {label}
+  app_id: app-999
+  channel: BETA
+  device_group: training-floor
+  endpoint: https://custom.mdm.local/v1/releases
+  token_env: MY_MDM_TOKEN
+"#
+        );
+        let parsed = QuestforgeConfig::from_yaml_str(&yaml);
+        assert!(matches!(
+            parsed,
+            Ok(ref cfg)
+                if cfg.mdm.as_ref().is_some_and(|m| m.provider == expected
+                    && m.app_id == "app-999"
+                    && m.channel == "BETA"
+                    && m.device_group == "training-floor"
+                    && m.token_env == "MY_MDM_TOKEN")
+        ));
+    }
 }

@@ -38,6 +38,9 @@ pub struct QuestforgeConfig {
     /// Declarative XR runtime and manifest capabilities managed by `quest sync`.
     #[serde(default)]
     pub xr_features: XrFeaturesConfig,
+    /// Optional enterprise MDM distribution settings (`meta-hms`, `managexr`, `arborxr`).
+    #[serde(default)]
+    pub mdm: Option<MdmConfig>,
     /// Release signing environment variable names.
     #[serde(default)]
     pub signing: SigningConfig,
@@ -236,6 +239,52 @@ impl Default for XrFeaturesConfig {
             passthrough: false,
             spatial_anchors: false,
             foveated_rendering: FoveationLevel::Medium,
+        }
+    }
+}
+
+/// Supported Enterprise MDM / HMS distribution providers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MdmTarget {
+    /// Meta Horizon Managed Services (HMS).
+    #[default]
+    #[serde(rename = "meta-hms")]
+    MetaHms,
+    /// ManageXR enterprise kiosk MDM.
+    #[serde(rename = "managexr")]
+    ManageXr,
+    /// ArborXR enterprise kiosk MDM.
+    #[serde(rename = "arborxr")]
+    ArborXr,
+}
+
+/// Declarative enterprise MDM release configuration in `quest_forge.yaml`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MdmConfig {
+    /// Target MDM provider (`meta-hms`, `managexr`, `arborxr`).
+    pub provider: MdmTarget,
+    /// Application ID in the MDM.
+    pub app_id: String,
+    /// Release channel or track (`ALPHA`, `BETA`, `PRODUCTION`).
+    pub channel: String,
+    /// Target MDM device group.
+    pub device_group: String,
+    /// Optional custom endpoint URL overriding the provider default.
+    pub endpoint: Option<String>,
+    /// Environment variable holding the MDM bearer token.
+    pub token_env: String,
+}
+
+impl Default for MdmConfig {
+    fn default() -> Self {
+        Self {
+            provider: MdmTarget::MetaHms,
+            app_id: String::new(),
+            channel: "PRODUCTION".to_string(),
+            device_group: "default".to_string(),
+            endpoint: None,
+            token_env: "QUESTFORGE_MDM_TOKEN".to_string(),
         }
     }
 }

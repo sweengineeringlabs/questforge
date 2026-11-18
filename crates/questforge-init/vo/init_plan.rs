@@ -125,6 +125,7 @@ impl ProjectScaffolder {
                 meta_xr_sdk: Some("68.0.0".to_string()),
             },
             xr_features: XrFeaturesConfig::default(),
+            mdm: None,
             signing: SigningConfig::default(),
         };
 

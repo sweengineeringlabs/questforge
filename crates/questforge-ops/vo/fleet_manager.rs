@@ -180,13 +180,15 @@ pub struct MockOpsEnv {
 
 /// Supported Enterprise XR MDM / Meta Horizon Managed Services providers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
 pub enum MdmProvider {
     /// Meta Horizon Managed Services (HMS).
+    #[serde(rename = "meta-hms")]
     MetaHms,
     /// ManageXR enterprise kiosk MDM.
+    #[serde(rename = "managexr")]
     ManageXr,
     /// ArborXR enterprise kiosk MDM.
+    #[serde(rename = "arborxr")]
     ArborXr,
 }
 

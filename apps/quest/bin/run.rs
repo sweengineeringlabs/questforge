@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
-use questforge_config::EngineKind;
+use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::QuestMcpServer;
@@ -337,34 +337,40 @@ enum OpsAction {
     },
     /// Publish a verified APK to Meta Horizon Managed Services (HMS) or an enterprise MDM
     HmsPush {
+        /// Optional project directory containing quest_forge.yaml (`mdm:` defaults)
+        #[arg(long)]
+        project_dir: Option<PathBuf>,
         /// Target MDM provider (`meta-hms`, `managexr`, `arborxr`)
-        #[arg(long, value_enum, default_value_t = CliMdmProvider::MetaHms)]
-        provider: CliMdmProvider,
+        #[arg(long, value_enum)]
+        provider: Option<CliMdmProvider>,
         /// Application ID in the MDM
         #[arg(long)]
-        app_id: String,
+        app_id: Option<String>,
         /// Path to the verified `.apk`
         #[arg(long)]
         apk: PathBuf,
         /// Release channel or track (e.g. ALPHA, BETA, PRODUCTION)
-        #[arg(long, default_value = "PRODUCTION")]
-        channel: String,
+        #[arg(long)]
+        channel: Option<String>,
         /// Target MDM device group
-        #[arg(long, default_value = "default")]
-        group: String,
+        #[arg(long)]
+        group: Option<String>,
         /// Optional custom MDM endpoint URL
         #[arg(long)]
         endpoint: Option<String>,
         /// Environment variable containing the MDM bearer token
-        #[arg(long, default_value = "QUESTFORGE_MDM_TOKEN")]
-        token_env: String,
+        #[arg(long)]
+        token_env: Option<String>,
     },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum CliMdmProvider {
+    #[value(name = "meta-hms")]
     MetaHms,
+    #[value(name = "managexr")]
     ManageXr,
+    #[value(name = "arborxr")]
     ArborXr,
 }
 
@@ -951,6 +957,7 @@ fn run_ops(args: OpsArgs) -> ExitCode {
             }
         }
         OpsAction::HmsPush {
+            project_dir,
             provider,
             app_id,
             apk,
@@ -959,14 +966,46 @@ fn run_ops(args: OpsArgs) -> ExitCode {
             endpoint,
             token_env,
         } => {
-            let token = std::env::var(&token_env).unwrap_or_default();
+            let mdm_cfg = project_dir
+                .as_deref()
+                .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
+                .and_then(|cfg| cfg.mdm);
+
+            let resolved_provider =
+                provider.map(MdmProvider::from).unwrap_or_else(|| {
+                    match mdm_cfg.as_ref().map(|m| m.provider) {
+                        Some(MdmTarget::ManageXr) => MdmProvider::ManageXr,
+                        Some(MdmTarget::ArborXr) => MdmProvider::ArborXr,
+                        _ => MdmProvider::MetaHms,
+                    }
+                });
+            let resolved_app_id = app_id
+                .or_else(|| mdm_cfg.as_ref().map(|m| m.app_id.clone()))
+                .unwrap_or_default();
+            if resolved_app_id.trim().is_empty() {
+                eprintln!("quest ops hms-push failed: provide --app-id or configure mdm.app_id in quest_forge.yaml");
+                return ExitCode::FAILURE;
+            }
+            let resolved_channel = channel
+                .or_else(|| mdm_cfg.as_ref().map(|m| m.channel.clone()))
+                .unwrap_or_else(|| "PRODUCTION".to_string());
+            let resolved_group = group
+                .or_else(|| mdm_cfg.as_ref().map(|m| m.device_group.clone()))
+                .unwrap_or_else(|| "default".to_string());
+            let resolved_endpoint =
+                endpoint.or_else(|| mdm_cfg.as_ref().and_then(|m| m.endpoint.clone()));
+            let resolved_token_env = token_env
+                .or_else(|| mdm_cfg.as_ref().map(|m| m.token_env.clone()))
+                .unwrap_or_else(|| "QUESTFORGE_MDM_TOKEN".to_string());
+
+            let token = std::env::var(&resolved_token_env).unwrap_or_default();
             let req = HmsReleaseRequest {
-                provider: provider.into(),
-                app_id,
+                provider: resolved_provider,
+                app_id: resolved_app_id,
                 apk_path: apk,
-                channel,
-                device_group: group,
-                endpoint,
+                channel: resolved_channel,
+                device_group: resolved_group,
+                endpoint: resolved_endpoint,
                 access_token: token,
             };
             match FleetManager::publish_to_mdm(&req, &env) {
