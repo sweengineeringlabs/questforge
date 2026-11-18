@@ -20,8 +20,10 @@ flowchart TD
 
     subgraph CLI["QuestForge CLI (quest)"]
         Init["quest init"]
+        Sync["quest sync (Declarative XR Codegen)"]
+        Check["quest check (Static VRC & Frame-Budget Linter)"]
         Setup["quest setup (Zero-Trust SHA-256)"]
-        Doctor["quest doctor (QD-001..QD-009)"]
+        Doctor["quest doctor --fix (QD-001..QD-009)"]
         MCP["quest mcp (JSON-RPC 2.0 Server)"]
         CI["quest ci (Build + CycloneDX SBOM)"]
         Verify["quest verify (QV-001..QV-006)"]
@@ -40,12 +42,16 @@ flowchart TD
     end
 
     Dev --> Init
+    Dev --> Sync
+    Dev --> Check
     Dev --> Setup
     Dev --> Doctor
     Dev --> CI
     Dev --> Verify
 
     AIDev --> MCP
+    MCP --> Sync
+    MCP --> Check
     MCP --> Doctor
     MCP --> CI
     MCP --> Verify
@@ -77,14 +83,13 @@ Bootstrap a standardized Quest repository, validate the local SDK/NDK/JDK/Editor
 
 ```mermaid
 flowchart LR
-    A["1. quest init"] --> B["2. quest setup"]
-    B --> C["3. quest doctor"]
-    C --> D["4. Edit Unity / Unreal Scene"]
-    D --> E["5. quest ci (Local APK Build)"]
-    E --> F["6. quest verify (QV-001..QV-006)"]
-    F -->|"Score = 100 / Ready"| G["7. quest ops deploy (USB / Wi-Fi Headset)"]
-    F -->|"Failed Gate"| D
-    G --> H["8. Open Pull Request"]
+    A["1. quest init"] --> B["2. Edit xr_features in quest_forge.yaml"]
+    B --> C["3. quest sync (Auto-Gen Manifest & Bootstrap)"]
+    C --> D["4. Write Core Scene Logic"]
+    D --> E["5. quest check (QF-SYNC / QF-VRC / QF-PERF)"]
+    E -->|"0 Offences"| F["6. quest ci + quest verify"]
+    E -->|"Offence"| D
+    F --> G["7. quest ops deploy"]
 ```
 
 ### Developer Sequence Diagram
@@ -115,22 +120,28 @@ sequenceDiagram
 
 ### Commands
 ```pwsh
-# 1. Scaffold repository
+# 1. Scaffold repository (auto-generates AndroidManifest.xml and QuestForgeBootstrap.gen.*)
 quest init my-quest-app --engine unity --package-id com.studio.myquestapp
 
-# 2. Provision verified toolchain binaries
+# 2. After editing xr_features in quest_forge.yaml, synchronize generated files
+quest sync --project-dir my-quest-app
+
+# 3. Run sub-second static source, VRC manifest, and XR frame-budget checks
+quest check --project-dir my-quest-app
+
+# 4. Provision verified toolchain binaries
 quest setup --project-dir my-quest-app --adb-version latest --adb-sha256 <sha256>
 
-# 3. Run workstation diagnostics
-quest doctor --project-dir my-quest-app
+# 5. Run workstation diagnostics (pass --fix to auto-heal manifest/config drift)
+quest doctor --fix --project-dir my-quest-app
 
-# 4. Build APK, metadata, and CycloneDX SBOM locally
+# 6. Build APK, metadata, and CycloneDX SBOM locally
 quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-version 0.1.0
 
-# 5. Run pre-flight VRC compliance verification
+# 7. Run pre-flight VRC compliance verification
 quest verify my-quest-app/dist/my-quest-app-0.1.0.apk --project-dir my-quest-app
 
-# 6. Deploy to connected headset and inspect logs
+# 8. Deploy to connected headset and inspect logs
 quest ops discover --group local-dev
 quest ops deploy local-dev my-quest-app/dist/my-quest-app-0.1.0.apk
 quest ops logcat <serial> --out my-quest-app/dist/logcat.txt
@@ -252,7 +263,9 @@ sequenceDiagram
 ### Exposed MCP Tools
 | MCP Tool | Purpose |
 |---|---|
-| `doctor_check` | Executes `QD-001`–`QD-009` and returns structured JSON diagnostics |
+| `doctor_check` | Executes `QD-001`–`QD-009` (supports `fix: true`) and returns structured JSON diagnostics |
+| `sync_project` | Synchronizes `quest_forge.yaml` (`xr_features`, `sdk`, `targets`) into `AndroidManifest.xml`, `QuestForgeBootstrap.gen.*`, and engine manifests |
+| `check_source` | Runs sub-second static source gates (`QF-SYNC-001`, `QF-VRC-001`, `QF-PERF-001`) |
 | `init_project` | Scaffolds a Unity or Unreal Quest project with `quest_forge.yaml` |
 | `build_project` | Executes `CiOrchestrator` to produce an APK, metadata, and SBOM |
 | `verify_release` | Runs `QV-001`–`QV-006` static verification on an `.apk` |

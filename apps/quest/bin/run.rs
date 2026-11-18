@@ -33,6 +33,10 @@ enum Commands {
     Doctor(DoctorArgs),
     /// Scaffold a Quest-ready Unity or Unreal repository
     Init(InitArgs),
+    /// Synchronize declarative quest_forge.yaml capabilities into engine manifests and bootstrap code
+    Sync(SyncArgs),
+    /// Run sub-second static source, VRC manifest, and XR frame-budget checks
+    Check(CheckArgs),
     /// Build, package, generate SBOM, and publish Quest APK artifacts
     Ci(CiArgs),
     /// Verify APK release readiness, signatures, ABIs, and Meta VRC policy compliance
@@ -93,6 +97,29 @@ struct DoctorArgs {
     /// Strict mode (treats signing warnings as failures)
     #[arg(long)]
     strict: bool,
+    /// Automatically synchronize and heal drifted project manifests/configs
+    #[arg(long)]
+    fix: bool,
+    /// Emit machine-readable JSON output
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct SyncArgs {
+    /// Directory containing quest_forge.yaml (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    project_dir: PathBuf,
+    /// Emit machine-readable JSON output
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct CheckArgs {
+    /// Directory containing quest_forge.yaml (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    project_dir: PathBuf,
     /// Emit machine-readable JSON output
     #[arg(long)]
     json: bool,
@@ -336,6 +363,8 @@ impl Runner {
             Commands::Setup(args) => run_setup(args),
             Commands::Doctor(args) => run_doctor(args),
             Commands::Init(args) => run_init(args),
+            Commands::Sync(args) => run_sync(args),
+            Commands::Check(args) => run_check(args),
             Commands::Ci(args) => run_ci(args),
             Commands::Verify(args) => run_verify(args),
             Commands::Mcp(args) => run_mcp(args),
@@ -402,10 +431,14 @@ fn run_setup(args: SetupArgs) -> ExitCode {
 }
 
 fn run_doctor(args: DoctorArgs) -> ExitCode {
+    if args.fix {
+        let _ = ProjectScaffolder::sync_project(&args.project_dir);
+    }
     let opts = DoctorOptions {
         project_dir: args.project_dir,
         ci: args.ci,
         strict: args.strict,
+        fix: args.fix,
     };
 
     match DoctorRunner::run(&opts) {
@@ -499,6 +532,7 @@ fn run_init(args: InitArgs) -> ExitCode {
                     project_dir: report.target_dir,
                     ci: false,
                     strict: false,
+                    fix: false,
                     json: false,
                 });
             }
@@ -506,6 +540,73 @@ fn run_init(args: InitArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest init failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_sync(args: SyncArgs) -> ExitCode {
+    match ProjectScaffolder::sync_project(&args.project_dir) {
+        Ok(report) => {
+            if args.json {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(err) => {
+                        eprintln!("failed to serialize sync report: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                println!(
+                    "Synchronized {} file(s) in {} ({:?}):",
+                    report.synced_files.len(),
+                    report.project_dir.display(),
+                    report.engine
+                );
+                for f in &report.synced_files {
+                    println!("  - {}", f.display());
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("quest sync failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_check(args: CheckArgs) -> ExitCode {
+    match ProjectScaffolder::check_project(&args.project_dir) {
+        Ok(report) => {
+            if args.json {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(err) => {
+                        eprintln!("failed to serialize check report: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                for finding in &report.findings {
+                    let badge = if finding.passed { "PASS" } else { "FAIL" };
+                    println!(
+                        "[{badge}] {} ({}): {}",
+                        finding.code, finding.name, finding.message
+                    );
+                    if let Some(fix) = &finding.remediation {
+                        println!("       fix: {fix}");
+                    }
+                }
+            }
+            if report.passed {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        Err(err) => {
+            eprintln!("quest check failed: {err}");
             ExitCode::FAILURE
         }
     }

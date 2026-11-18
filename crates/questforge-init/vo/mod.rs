@@ -6,4 +6,6 @@
 
 mod init_plan;
 
-pub use self::init_plan::{InitOptions, InitReport, ProjectScaffolder};
+pub use self::init_plan::{
+    InitOptions, InitReport, ProjectScaffolder, SourceCheckReport, SourceFinding, SyncReport,
+};

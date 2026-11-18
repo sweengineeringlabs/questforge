@@ -17,6 +17,7 @@ const DEFAULT_BUILD_TOOLS: &str = "34.0.0";
 const DEFAULT_ADB: &str = "35.0.2";
 const DEFAULT_KEYSTORE_ENV: &str = "QUEST_KEYSTORE_PATH";
 const DEFAULT_ALIAS_ENV: &str = "QUEST_KEY_ALIAS";
+const DEFAULT_REFRESH_RATE_HZ: u32 = 90;
 
 /// Root `quest_forge.yaml` manifest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,6 +35,9 @@ pub struct QuestforgeConfig {
     /// XR SDK settings.
     #[serde(default)]
     pub sdk: SdkConfig,
+    /// Declarative XR runtime and manifest capabilities managed by `quest sync`.
+    #[serde(default)]
+    pub xr_features: XrFeaturesConfig,
     /// Release signing environment variable names.
     #[serde(default)]
     pub signing: SigningConfig,
@@ -179,6 +183,61 @@ impl Default for SdkConfig {
     }
 }
 
+/// Supported Quest input modes declared in `quest_forge.yaml`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InputMode {
+    /// Touch / Touch Plus controllers.
+    Controllers,
+    /// Optical hand tracking (`com.oculus.permission.HAND_TRACKING`).
+    Hands,
+}
+
+/// Fixed or dynamic foveated rendering level.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FoveationLevel {
+    /// Foveated rendering disabled.
+    Off,
+    /// Low peripheral resolution reduction.
+    Low,
+    /// Balanced peripheral resolution reduction.
+    #[default]
+    Medium,
+    /// Aggressive peripheral resolution reduction.
+    High,
+    /// Dynamic GPU-load-driven foveation.
+    Dynamic,
+}
+
+/// Declarative XR runtime and manifest features synchronized by `quest sync`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct XrFeaturesConfig {
+    /// Target headset display refresh rate in Hz (`72`, `90`, or `120`).
+    pub refresh_rate_hz: u32,
+    /// Enabled user interaction modes (`controllers`, `hands`).
+    pub input_modes: Vec<InputMode>,
+    /// Enable Mixed Reality passthrough camera support (`com.oculus.feature.PASSTHROUGH`).
+    pub passthrough: bool,
+    /// Enable persistent spatial anchors (`com.oculus.permission.USE_ANCHOR_API`).
+    pub spatial_anchors: bool,
+    /// Foveated rendering level (`off`, `low`, `medium`, `high`, `dynamic`).
+    pub foveated_rendering: FoveationLevel,
+}
+
+impl Default for XrFeaturesConfig {
+    fn default() -> Self {
+        Self {
+            refresh_rate_hz: DEFAULT_REFRESH_RATE_HZ,
+            input_modes: vec![InputMode::Controllers],
+            passthrough: false,
+            spatial_anchors: false,
+            foveated_rendering: FoveationLevel::Medium,
+        }
+    }
+}
+
 /// Keystore signing environment variable references.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -255,6 +314,18 @@ impl QuestforgeConfig {
             return Err(ConfigError::Validation {
                 field: "targets.min_sdk",
                 message: "must be less than or equal to targets.target_sdk".to_string(),
+            });
+        }
+        if !matches!(self.xr_features.refresh_rate_hz, 72 | 90 | 120) {
+            return Err(ConfigError::Validation {
+                field: "xr_features.refresh_rate_hz",
+                message: "must be one of 72, 90, or 120".to_string(),
+            });
+        }
+        if self.xr_features.input_modes.is_empty() {
+            return Err(ConfigError::Validation {
+                field: "xr_features.input_modes",
+                message: "must specify at least one input mode (controllers or hands)".to_string(),
             });
         }
         Ok(())

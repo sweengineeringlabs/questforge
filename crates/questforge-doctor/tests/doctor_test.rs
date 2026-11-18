@@ -92,6 +92,7 @@ fn test_doctor_all_checks_pass_happy() {
         project_dir: root.path().join("app"),
         ci: false,
         strict: false,
+        fix: false,
     };
 
     let report = DoctorRunner::run_with_env(&opts, &DoctorEnv::Mock(mock));
@@ -113,6 +114,7 @@ fn test_doctor_missing_manifest_fails_with_remediation_error() {
         project_dir: empty.path().to_path_buf(),
         ci: false,
         strict: false,
+        fix: false,
     };
     let report = DoctorRunner::run_with_env(&opts, &DoctorEnv::Mock(MockDoctorEnv::default()));
     assert!(matches!(
@@ -150,6 +152,7 @@ fn test_doctor_ci_mode_skips_headset_and_enforces_signing_and_swartch_edge() {
         project_dir: root.path().join("app"),
         ci: true,
         strict: false,
+        fix: false,
     };
     let report = DoctorRunner::run_with_env(&opts, &DoctorEnv::Mock(mock));
     assert!(matches!(
@@ -160,4 +163,28 @@ fn test_doctor_ci_mode_skips_headset_and_enforces_signing_and_swartch_edge() {
                 && r.checks.iter().any(|c| c.id == "QD-008" && c.status == CheckStatus::Fail)
                 && r.checks.iter().any(|c| c.id == "QD-009" && c.status == CheckStatus::Fail)
     ));
+}
+
+#[test]
+fn test_doctor_fix_heals_missing_packages_and_vocabulary_happy() {
+    let (root, mock) = create_full_fixture();
+    let proj = root.path().join("app");
+    assert!(fs::remove_file(proj.join("Packages").join("manifest.json")).is_ok());
+    assert!(fs::remove_file(proj.join("config").join("vocabulary.toml")).is_ok());
+
+    let opts = DoctorOptions {
+        project_dir: proj.clone(),
+        ci: false,
+        strict: false,
+        fix: true,
+    };
+    let report = DoctorRunner::run_with_env(&opts, &DoctorEnv::Mock(mock));
+    assert!(matches!(
+        report,
+        Ok(ref r)
+            if !r.has_failures()
+                && r.checks.iter().all(|c| c.status == CheckStatus::Pass)
+    ));
+    assert!(proj.join("Packages").join("manifest.json").exists());
+    assert!(proj.join("config").join("vocabulary.toml").exists());
 }

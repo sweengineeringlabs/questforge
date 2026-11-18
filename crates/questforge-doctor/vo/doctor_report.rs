@@ -65,6 +65,8 @@ pub struct DoctorOptions {
     pub ci: bool,
     /// Strict mode (treats warnings on signing as failures).
     pub strict: bool,
+    /// Automatically heal project/manifest/vocabulary drift where possible (`--fix`).
+    pub fix: bool,
 }
 
 /// Captured command output for deterministic testing.
@@ -146,6 +148,10 @@ impl DoctorRunner {
         let (qd001, maybe_cfg) = check_project_config(&opts.project_dir);
         let cfg_ref = maybe_cfg.as_ref();
 
+        if opts.fix {
+            apply_auto_fixes(&opts.project_dir, cfg_ref);
+        }
+
         let checks = vec![
             qd001,
             check_engine_installation(&opts.project_dir, cfg_ref, env),
@@ -163,6 +169,48 @@ impl DoctorRunner {
             ci_mode: opts.ci,
             checks,
         })
+    }
+}
+
+fn apply_auto_fixes(project_dir: &Path, cfg: Option<&QuestforgeConfig>) {
+    if let Some(c) = cfg {
+        if c.project.engine == EngineKind::Unity {
+            let pkg_dir = project_dir.join("Packages");
+            let manifest_path = pkg_dir.join("manifest.json");
+            let needs_fix = match fs::read_to_string(&manifest_path) {
+                Ok(raw) => {
+                    !raw.contains("com.meta.xr.sdk")
+                        || (c.sdk.openxr && !raw.contains("com.unity.xr.openxr"))
+                }
+                Err(_) => true,
+            };
+            if needs_fix && fs::create_dir_all(&pkg_dir).is_ok() {
+                let meta_ver = c.sdk.meta_xr_sdk.as_deref().unwrap_or("68.0.0");
+                let content = if c.sdk.openxr {
+                    format!(
+                        "{{\n  \"dependencies\": {{\n    \"com.meta.xr.sdk.all\": \"{meta_ver}\",\n    \"com.unity.xr.openxr\": \"1.10.0\"\n  }}\n}}\n"
+                    )
+                } else {
+                    format!(
+                        "{{\n  \"dependencies\": {{\n    \"com.meta.xr.sdk.all\": \"{meta_ver}\"\n  }}\n}}\n"
+                    )
+                };
+                let _ = fs::write(manifest_path, content);
+            }
+        }
+    }
+
+    let vocab_cfg = project_dir.join("config/vocabulary.toml");
+    let vocab_root = project_dir.join("vocabulary.toml");
+    if !vocab_cfg.exists() && !vocab_root.exists() {
+        if let Some(parent) = vocab_cfg.parent() {
+            if fs::create_dir_all(parent).is_ok() {
+                let _ = fs::write(
+                    vocab_cfg,
+                    "[folders]\nsource = \"src\"\ntests  = \"tests\"\ncompanions = [\"docs\", \"tests\", \"scripts\", \"configs\"]\n",
+                );
+            }
+        }
     }
 }
 

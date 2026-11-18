@@ -16,4 +16,6 @@ mod error;
 mod vo;
 
 pub use self::error::InitError;
-pub use self::vo::{InitOptions, InitReport, ProjectScaffolder};
+pub use self::vo::{
+    InitOptions, InitReport, ProjectScaffolder, SourceCheckReport, SourceFinding, SyncReport,
+};

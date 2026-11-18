@@ -8,25 +8,31 @@ DevSecOps, release verification, MCP agent tooling, and lab fleet management pla
 # 1. Scaffold a Quest-ready Unity or Unreal project
 cargo run --bin quest -- init my-quest-app --engine unity
 
-# 2. Provision Android platform-tools (adb) into ~/.questforge/cache
+# 2. Synchronize declarative xr_features in quest_forge.yaml into AndroidManifest.xml & bootstrap code
+cargo run --bin quest -- sync --project-dir my-quest-app
+
+# 3. Run sub-second static source, VRC manifest, and XR frame-budget checks (QF-SYNC-001..QF-PERF-001)
+cargo run --bin quest -- check --project-dir my-quest-app
+
+# 4. Provision Android platform-tools (adb) into ~/.questforge/cache
 cargo run --bin quest -- setup --adb-version latest --allow-unverified
 
-# 3. Validate workstation or CI environment (QD-001..QD-009)
-cargo run --bin quest -- doctor --project-dir my-quest-app
+# 5. Validate workstation or CI environment (QD-001..QD-009; pass --fix to auto-heal drift)
+cargo run --bin quest -- doctor --fix --project-dir my-quest-app
 
-# 4. Run CI build plan, metadata, and CycloneDX 1.5 SBOM generation
+# 6. Run CI build plan, metadata, and CycloneDX 1.5 SBOM generation
 cargo run --bin quest -- ci --project-dir my-quest-app --output-dir my-quest-app/dist --dry-run
 
-# 5. Statically verify an APK against Meta Horizon VRC rules (CLI, JSON, SARIF, HTML, PDF)
+# 7. Statically verify an APK against Meta Horizon VRC rules (CLI, JSON, SARIF, HTML, PDF)
 cargo run --bin quest -- verify path/to/app.apk --format html --out scorecard.html
 
-# 6. Start the MCP server for AI coding agents
+# 8. Start the MCP server for AI coding agents
 cargo run --bin quest -- mcp --list-tools
 
-# 7. Manage lab/device fleets over adb
+# 9. Manage lab/device fleets over adb
 cargo run --bin quest -- ops discover --group qa-lab
 
-# 8. Start the Control Plane + machineweb (mweb) UI
+# 10. Start the Control Plane + machineweb (mweb) UI
 cargo run --bin quest -- serve --addr 127.0.0.1:8090 --web-root web/dist
 ```
 
@@ -37,11 +43,11 @@ cargo run --bin quest -- serve --addr 127.0.0.1:8090 --web-root web/dist
 | `crates/questforge-api` | `api` | Domain service/builder/capability contracts and errors |
 | `crates/questforge-config` | `lib` | `quest_forge.yaml` schema, validation, and Unity/Unreal version auto-detection |
 | `crates/questforge-toolchain` | `lib` | Zero-trust SHA-256 toolchain provisioning & caching (`quest setup`) |
-| `crates/questforge-doctor` | `lib` | `QD-001`–`QD-009` workstation and CI diagnostics (`quest doctor`) |
-| `crates/questforge-init` | `lib` | Unity/Unreal OpenXR repository scaffolding + `QuestForgeBuild.cs` (`quest init`) |
+| `crates/questforge-doctor` | `lib` | `QD-001`–`QD-009` workstation/CI diagnostics and `--fix` auto-remediation (`quest doctor`) |
+| `crates/questforge-init` | `lib` | Unity/Unreal scaffolding, declarative XR codegen (`quest sync`), and source linting (`quest check`) |
 | `crates/questforge-ci` | `lib` | Unity/Unreal build orchestration, metadata, CycloneDX SBOM, and CI templates (`quest ci`) |
 | `crates/questforge-verify` | `lib` | Static APK integrity, v1/v2+ signature, `arm64-v8a`, and Meta VRC validator (`quest verify`) |
-| `crates/questforge-mcp` | `lib` | JSON-RPC 2.0 stdio MCP server exposing 7 tools (`quest mcp`) |
+| `crates/questforge-mcp` | `lib` | JSON-RPC 2.0 stdio MCP server exposing 9 tools (`quest mcp`) |
 | `crates/questforge-ops` | `lib` | `adb` fleet discovery, telemetry, deploy/rollback, logcat, screenshot, and lab agent (`quest ops`) |
 | `crates/questforge-server` | `lib` | Control plane REST API, swappable `InMemory`/`PostgresStore`, HS256 JWT/RBAC, and audit log (`quest serve`) |
 | `apps/quest` | `bin` | Unified `quest` CLI binary |

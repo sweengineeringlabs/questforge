@@ -17,6 +17,6 @@ mod vo;
 
 pub use self::error::ConfigError;
 pub use self::vo::{
-    EngineKind, MetaVrCliConfig, ProjectConfig, QuestDevice, QuestforgeConfig, SdkConfig,
-    SigningConfig, TargetsConfig, ToolchainConfig,
+    EngineKind, FoveationLevel, InputMode, MetaVrCliConfig, ProjectConfig, QuestDevice,
+    QuestforgeConfig, SdkConfig, SigningConfig, TargetsConfig, ToolchainConfig, XrFeaturesConfig,
 };

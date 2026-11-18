@@ -101,7 +101,28 @@ impl QuestMcpServer {
                     "properties": {
                         "project_dir": { "type": "string", "default": "." },
                         "ci": { "type": "boolean", "default": false },
-                        "strict": { "type": "boolean", "default": false }
+                        "strict": { "type": "boolean", "default": false },
+                        "fix": { "type": "boolean", "default": false }
+                    }
+                }),
+            },
+            McpToolDefinition {
+                name: "sync_project".to_string(),
+                description: "Synchronize quest_forge.yaml xr_features and SDK settings into AndroidManifest.xml, bootstrap code, and engine manifests.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project_dir": { "type": "string", "default": "." }
+                    }
+                }),
+            },
+            McpToolDefinition {
+                name: "check_source".to_string(),
+                description: "Run sub-second static source checks (QF-SYNC-001, QF-VRC-001, QF-PERF-001) on a QuestForge project.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project_dir": { "type": "string", "default": "." }
                     }
                 }),
             },
@@ -286,6 +307,8 @@ impl QuestMcpServer {
 
         let outcome = match name {
             "doctor_check" => call_doctor(&args),
+            "sync_project" => call_sync(&args),
+            "check_source" => call_check_source(&args),
             "init_project" => call_init(&args),
             "build_project" => call_build(&args),
             "verify_release" => call_verify(&args),
@@ -368,13 +391,38 @@ fn call_doctor(args: &Value) -> Result<String, String> {
         .get("strict")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let fix = args.get("fix").and_then(|v| v.as_bool()).unwrap_or(false);
+    if fix {
+        let _ = ProjectScaffolder::sync_project(Path::new(project_dir));
+    }
 
     let report = DoctorRunner::run(&DoctorOptions {
         project_dir: PathBuf::from(project_dir),
         ci,
         strict,
+        fix,
     })
     .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
+}
+
+fn call_sync(args: &Value) -> Result<String, String> {
+    let project_dir = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".");
+    let report =
+        ProjectScaffolder::sync_project(Path::new(project_dir)).map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
+}
+
+fn call_check_source(args: &Value) -> Result<String, String> {
+    let project_dir = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".");
+    let report =
+        ProjectScaffolder::check_project(Path::new(project_dir)).map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 

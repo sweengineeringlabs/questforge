@@ -14,6 +14,10 @@ pub enum InitError {
         path: PathBuf,
     },
 
+    /// Failed to parse or validate `quest_forge.yaml`.
+    #[error("manifest error: {0}")]
+    Config(#[from] questforge_config::ConfigError),
+
     /// Failed to serialize `quest_forge.yaml`.
     #[error("manifest serialization error: {0}")]
     Yaml(#[from] serde_yaml::Error),

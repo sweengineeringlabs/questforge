@@ -168,3 +168,45 @@ targets:
         })
     ));
 }
+
+#[test]
+fn test_parse_xr_features_and_validate_refresh_rate_edge() {
+    let valid_yaml = r#"
+version: "1"
+project:
+  name: mr-app
+  package_id: com.acme.mrapp
+  engine: unity
+xr_features:
+  refresh_rate_hz: 120
+  input_modes: [controllers, hands]
+  passthrough: true
+  spatial_anchors: true
+  foveated_rendering: dynamic
+"#;
+    let parsed = QuestforgeConfig::from_yaml_str(valid_yaml);
+    assert!(matches!(
+        parsed,
+        Ok(ref cfg)
+            if cfg.xr_features.refresh_rate_hz == 120
+                && cfg.xr_features.passthrough
+                && cfg.xr_features.spatial_anchors
+    ));
+
+    let invalid_hz = r#"
+version: "1"
+project:
+  name: mr-app
+  package_id: com.acme.mrapp
+  engine: unity
+xr_features:
+  refresh_rate_hz: 60
+"#;
+    assert!(matches!(
+        QuestforgeConfig::from_yaml_str(invalid_hz),
+        Err(ConfigError::Validation {
+            field: "xr_features.refresh_rate_hz",
+            ..
+        })
+    ));
+}

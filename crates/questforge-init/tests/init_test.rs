@@ -89,3 +89,82 @@ fn test_scaffold_refuses_non_empty_target_without_force_error() {
     ));
     assert!(!dir.path().join("quest_forge.yaml").exists());
 }
+
+#[test]
+fn test_sync_and_check_project_detects_drift_and_perf_violations_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let target = dir.path().join("mr-quest");
+    let opts = InitOptions {
+        target_dir: target.clone(),
+        name: "mr-quest".to_string(),
+        package_id: "com.acme.mrquest".to_string(),
+        engine: EngineKind::Unity,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    };
+    assert!(ProjectScaffolder::scaffold(&opts).is_ok());
+
+    let initial_check = ProjectScaffolder::check_project(&target);
+    assert!(matches!(initial_check, Ok(ref r) if r.passed && r.findings.len() == 3));
+
+    assert!(fs::write(
+        target.join("quest_forge.yaml"),
+        r#"version: "1"
+project:
+  name: mr-quest
+  package_id: com.acme.mrquest
+  engine: unity
+  engine_version: "2022.3.42f1"
+xr_features:
+  refresh_rate_hz: 120
+  input_modes: [controllers, hands]
+  passthrough: true
+  spatial_anchors: true
+  foveated_rendering: high
+"#,
+    )
+    .is_ok());
+
+    let drifted_check = ProjectScaffolder::check_project(&target);
+    assert!(matches!(
+        drifted_check,
+        Ok(ref r)
+            if !r.passed
+                && r.findings.iter().any(|f| f.code == "QF-SYNC-001" && !f.passed)
+    ));
+
+    let sync_res = ProjectScaffolder::sync_project(&target);
+    assert!(sync_res.is_ok());
+
+    let manifest_xml =
+        fs::read_to_string(target.join("Assets/Plugins/Android/AndroidManifest.xml"));
+    assert!(matches!(
+        manifest_xml,
+        Ok(ref xml)
+            if xml.contains("com.oculus.permission.HAND_TRACKING")
+                && xml.contains("com.oculus.feature.PASSTHROUGH")
+                && xml.contains("com.oculus.permission.USE_ANCHOR_API")
+    ));
+
+    let post_sync_check = ProjectScaffolder::check_project(&target);
+    assert!(matches!(post_sync_check, Ok(ref r) if r.passed));
+
+    let scripts_dir = target.join("Assets/Scripts");
+    assert!(fs::create_dir_all(&scripts_dir).is_ok());
+    assert!(fs::write(
+        scripts_dir.join("BadLoop.cs"),
+        "using UnityEngine;\npublic class BadLoop : MonoBehaviour {\n  void Update() { var cam = Camera.main; }\n}\n",
+    )
+    .is_ok());
+
+    let perf_check = ProjectScaffolder::check_project(&target);
+    assert!(matches!(
+        perf_check,
+        Ok(ref r)
+            if !r.passed
+                && r.findings.iter().any(|f| f.code == "QF-PERF-001" && !f.passed)
+    ));
+}
