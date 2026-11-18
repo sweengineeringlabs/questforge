@@ -9,6 +9,7 @@ use questforge_config::EngineKind;
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::QuestMcpServer;
+use questforge_ops::{FleetInventory, FleetManager, OpsEnv};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
 
@@ -37,6 +38,8 @@ enum Commands {
     Verify(VerifyArgs),
     /// Run the QuestForge Model Context Protocol (MCP) server over stdio
     Mcp(McpArgs),
+    /// Manage Quest lab and device fleets (discover, deploy, rollback, telemetry, logcat, screenshot)
+    Ops(OpsArgs),
 }
 
 #[derive(Debug, Args)]
@@ -225,6 +228,74 @@ struct McpArgs {
     list_tools: bool,
 }
 
+#[derive(Debug, Args)]
+struct OpsArgs {
+    /// Fleet inventory registry JSON path
+    #[arg(long, default_value = ".questforge/fleet.json")]
+    registry: PathBuf,
+    /// Emit JSON output
+    #[arg(long)]
+    json: bool,
+    #[command(subcommand)]
+    action: OpsAction,
+}
+
+#[derive(Debug, Subcommand)]
+enum OpsAction {
+    /// Discover connected adb devices and update inventory
+    Discover {
+        /// Default group for newly discovered devices
+        #[arg(long, default_value = "default")]
+        group: String,
+    },
+    /// Register or assign a device serial to a group
+    Register {
+        /// Device serial or <ip>:<port>
+        serial: String,
+        /// Target group name
+        #[arg(long, default_value = "default")]
+        group: String,
+    },
+    /// List registered devices in inventory
+    List,
+    /// Refresh firmware and battery telemetry for a device
+    Telemetry {
+        /// Device serial
+        serial: String,
+    },
+    /// Deploy (or schedule) an APK to a device serial or group
+    Deploy {
+        /// Target device serial or group name
+        target: String,
+        /// Path to APK file
+        apk: PathBuf,
+        /// Optional scheduled timestamp/window
+        #[arg(long)]
+        schedule: Option<String>,
+    },
+    /// Roll back a device or group to its previous APK
+    Rollback {
+        /// Target device serial or group name
+        target: String,
+    },
+    /// Capture logcat output from a device
+    Logcat {
+        /// Device serial
+        serial: String,
+        /// Output log file path
+        #[arg(long, default_value = "device-logcat.txt")]
+        out: PathBuf,
+    },
+    /// Capture a PNG screenshot from a device
+    Screenshot {
+        /// Device serial
+        serial: String,
+        /// Output PNG path
+        #[arg(long, default_value = "screenshot.png")]
+        out: PathBuf,
+    },
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -240,6 +311,7 @@ impl Runner {
             Commands::Ci(args) => run_ci(args),
             Commands::Verify(args) => run_verify(args),
             Commands::Mcp(args) => run_mcp(args),
+            Commands::Ops(args) => run_ops(args),
         }
     }
 }
@@ -519,6 +591,164 @@ fn run_mcp(args: McpArgs) -> ExitCode {
         Err(err) => {
             eprintln!("quest mcp failed: {err}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_ops(args: OpsArgs) -> ExitCode {
+    let mut inv = match FleetInventory::load(&args.registry) {
+        Ok(i) => i,
+        Err(err) => {
+            eprintln!("quest ops failed to load registry: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let env = OpsEnv::System;
+
+    match args.action {
+        OpsAction::Discover { group } => match FleetManager::discover(&mut inv, &group, &env) {
+            Ok(devs) => {
+                if let Err(err) = inv.save(&args.registry) {
+                    eprintln!("failed to save registry: {err}");
+                    return ExitCode::FAILURE;
+                }
+                if args.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&devs).unwrap_or_default()
+                    );
+                } else {
+                    println!("Discovered {} device(s):", devs.len());
+                    for d in devs {
+                        println!("  - {} [{}] (group: {})", d.serial, d.state, d.group);
+                    }
+                }
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("quest ops discover failed: {err}");
+                ExitCode::FAILURE
+            }
+        },
+        OpsAction::Register { serial, group } => {
+            let rec = FleetManager::register_device(&mut inv, &serial, &group);
+            if let Err(err) = inv.save(&args.registry) {
+                eprintln!("failed to save registry: {err}");
+                return ExitCode::FAILURE;
+            }
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&rec).unwrap_or_default());
+            } else {
+                println!("Registered {} in group '{}'", rec.serial, rec.group);
+            }
+            ExitCode::SUCCESS
+        }
+        OpsAction::List => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&inv).unwrap_or_default());
+            } else {
+                println!("Registered devices ({}):", inv.devices.len());
+                for d in inv.devices.values() {
+                    println!(
+                        "  - {} [{}] group={} fw={:?} battery={:?}%",
+                        d.serial, d.state, d.group, d.firmware_version, d.battery_level
+                    );
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        OpsAction::Telemetry { serial } => {
+            match FleetManager::refresh_telemetry(&mut inv, &serial, &env) {
+                Ok(rec) => {
+                    if let Err(err) = inv.save(&args.registry) {
+                        eprintln!("failed to save registry: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                    if args.json {
+                        println!("{}", serde_json::to_string_pretty(&rec).unwrap_or_default());
+                    } else {
+                        println!(
+                            "{}: fw={:?}, battery={:?}% ({:?})",
+                            rec.serial, rec.firmware_version, rec.battery_level, rec.battery_health
+                        );
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops telemetry failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::Deploy {
+            target,
+            apk,
+            schedule,
+        } => match FleetManager::deploy_apk(&mut inv, &target, &apk, schedule.as_deref(), &env) {
+            Ok(rec) => {
+                if let Err(err) = inv.save(&args.registry) {
+                    eprintln!("failed to save registry: {err}");
+                    return ExitCode::FAILURE;
+                }
+                if args.json {
+                    println!("{}", serde_json::to_string_pretty(&rec).unwrap_or_default());
+                } else {
+                    println!(
+                        "Deployment {}: {} -> {} ({} device(s))",
+                        rec.status,
+                        rec.apk_path.display(),
+                        rec.target,
+                        rec.devices.len()
+                    );
+                }
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("quest ops deploy failed: {err}");
+                ExitCode::FAILURE
+            }
+        },
+        OpsAction::Rollback { target } => match FleetManager::rollback(&mut inv, &target, &env) {
+            Ok(rec) => {
+                if let Err(err) = inv.save(&args.registry) {
+                    eprintln!("failed to save registry: {err}");
+                    return ExitCode::FAILURE;
+                }
+                if args.json {
+                    println!("{}", serde_json::to_string_pretty(&rec).unwrap_or_default());
+                } else {
+                    println!("Rolled back {} to {}", rec.target, rec.apk_path.display());
+                }
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("quest ops rollback failed: {err}");
+                ExitCode::FAILURE
+            }
+        },
+        OpsAction::Logcat { serial, out } => {
+            match FleetManager::capture_logcat(&serial, &out, &env) {
+                Ok(path) => {
+                    println!("Saved logcat to {}", path.display());
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops logcat failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::Screenshot { serial, out } => {
+            match FleetManager::capture_screenshot(&serial, &out, &env) {
+                Ok(path) => {
+                    println!("Saved screenshot to {}", path.display());
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops screenshot failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
         }
     }
 }

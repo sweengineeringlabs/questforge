@@ -1,0 +1,114 @@
+//! Integration tests for `questforge-ops`.
+
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use questforge_ops::{AdbOutput, FleetInventory, FleetManager, MockOpsEnv, OpsEnv, OpsError};
+use tempfile::TempDir;
+
+#[test]
+fn test_ops_discover_telemetry_deploy_rollback_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let registry_path = dir.path().join("fleet.json");
+
+    let mut responses = BTreeMap::new();
+    responses.insert(
+        "devices".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"List of devices attached\nemulator-5554\tdevice\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    responses.insert(
+        "-s emulator-5554 shell getprop ro.build.display.id".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"SQ3A.220605.009.A1\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    responses.insert(
+        "-s emulator-5554 shell dumpsys battery".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"Current Battery Service state:\n  level: 87\n  health: 2\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+
+    let env = OpsEnv::Mock(MockOpsEnv { responses });
+    let mut inv = FleetInventory::default();
+
+    let found = FleetManager::discover(&mut inv, "qa-lab", &env);
+    assert!(matches!(found, Ok(ref devs) if devs.len() == 1 && devs[0].serial == "emulator-5554"));
+
+    let updated = FleetManager::refresh_telemetry(&mut inv, "emulator-5554", &env);
+    assert!(matches!(
+        updated,
+        Ok(ref d)
+            if d.firmware_version.as_deref() == Some("SQ3A.220605.009.A1")
+                && d.battery_level == Some(87)
+                && d.battery_health.as_deref() == Some("good")
+    ));
+
+    assert!(FleetManager::deploy_apk(&mut inv, "qa-lab", Path::new("v1.apk"), None, &env).is_ok());
+    assert!(FleetManager::deploy_apk(&mut inv, "qa-lab", Path::new("v2.apk"), None, &env).is_ok());
+    let rolled = FleetManager::rollback(&mut inv, "qa-lab", &env);
+    assert!(matches!(
+        rolled,
+        Ok(ref r) if r.status == "rolled_back" && r.apk_path == Path::new("v1.apk")
+    ));
+
+    assert!(inv.save(&registry_path).is_ok());
+    let reloaded = FleetInventory::load(&registry_path);
+    assert!(matches!(
+        reloaded,
+        Ok(ref loaded) if loaded.devices.contains_key("emulator-5554") && loaded.deployments.len() == 3
+    ));
+}
+
+#[test]
+fn test_ops_logcat_and_screenshot_capture_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let mut responses = BTreeMap::new();
+    responses.insert(
+        "-s emulator-5554 logcat -d".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"I/Unity: XR initialized\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    responses.insert(
+        "-s emulator-5554 exec-out screencap -p".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"\x89PNG\r\n\x1a\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    let env = OpsEnv::Mock(MockOpsEnv { responses });
+
+    let log_path = dir.path().join("device.log");
+    let shot_path = dir.path().join("screen.png");
+    assert!(FleetManager::capture_logcat("emulator-5554", &log_path, &env).is_ok());
+    assert!(FleetManager::capture_screenshot("emulator-5554", &shot_path, &env).is_ok());
+    assert!(log_path.exists());
+    assert!(shot_path.exists());
+}
+
+#[test]
+fn test_ops_rollback_without_previous_apk_error() {
+    let mut inv = FleetInventory::default();
+    FleetManager::register_device(&mut inv, "quest-01", "canary");
+    let res = FleetManager::rollback(&mut inv, "quest-01", &OpsEnv::Mock(MockOpsEnv::default()));
+    assert!(matches!(
+        res,
+        Err(OpsError::NoRollbackTarget { ref serial }) if serial == "quest-01"
+    ));
+}
