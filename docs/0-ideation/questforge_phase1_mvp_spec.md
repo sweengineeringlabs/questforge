@@ -23,15 +23,16 @@ Deliver immediate, zero-infrastructure value to Quest/Horizon OS developers and 
 
 ---
 
-## 2. Packaging Strategy
+## 2. Packaging & CI Strategy
 
 Instead of maintaining three separate Rust release pipelines in Phase 1, ship:
 1. **One Rust (`1.100.0`) CLI binary (`quest`):**
    - `quest init` (also aliasable as `quest-init`)
    - `quest doctor` (also aliasable as `quest-doctor`)
    - `quest setup` (local wrapper around `setup-metavr` logic)
-2. **One GitHub Action (`setup-metavr`):**
-   - Composite action invoking `quest setup`, or a TypeScript action developed/tested with **Bun (`1.4.2`)** and bundled with `bun build --target=node` for GitHub's runner (`@actions/cache`).
+2. **Provider-Agnostic CI (`swartch scaffold --scripts`):**
+   - Generate `scripts/ci.sh` and lifecycle scripts via `swartch scaffold --scripts` so CI does not rely on GitHub Actions.
+   - `setup-metavr` (or `setup-quest`) remains an optional thin wrapper for teams using GitHub Actions.
 
 ---
 
@@ -162,8 +163,8 @@ my-quest-app/
 ├── questforge.yaml
 ├── config/
 │   └── vocabulary.toml         # Swartch Architecture 4.0 vocabulary file
-├── scripts/                    # Environment lifecycle scripts (swartch --with-scripts)
-├── configs/                    # App & environment configs (swartch --with-configs)
+├── scripts/                    # Environment & CI lifecycle scripts (`ci.sh` via `swartch scaffold --scripts`)
+├── configs/                    # App & environment configs (`swartch scaffold --configs`)
 ├── .gitignore                  # Tuned for Unity (Library/, Temp/, Logs/) or Unreal (Intermediate/, Saved/, Binaries/)
 ├── .gitattributes              # Git LFS rules for .fbx, .png, .wav, .apk, .asset
 ├── .github/
