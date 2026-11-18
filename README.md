@@ -54,5 +54,6 @@ cargo run --bin quest -- serve --addr 127.0.0.1:8090 --web-root web/dist
 - [Platform Vision & Design Document](docs/0-ideation/questForge_platform_ddd.md)
 - [Software Requirements Specification](docs/0-ideation/questForge_platform_srs.md)
 - [Mobile Emulator Integration Plan](docs/3-design/mobile-emulator-integration.md)
+- [Developer Workflow](docs/3-design/developer_workflow.md)
 - [Developer Guide](docs/4-development/developer_guide.md)
 - [Operations Runbook](docs/6-operations/runbook.md)
