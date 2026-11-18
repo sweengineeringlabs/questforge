@@ -22,6 +22,8 @@ pub struct LlmToolInvocation {
     pub name: String,
     /// Parsed JSON argument object.
     pub arguments: Value,
+    /// Optional provider-specific metadata (e.g. Gemini `extra_content.google.thought_signature`).
+    pub extra_content: Option<Value>,
 }
 
 /// Provider-neutral conversation message used across LLM turns.

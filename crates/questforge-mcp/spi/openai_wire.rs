@@ -1,5 +1,7 @@
 //! Shared OpenAI Chat Completions wire-format adapter used by OpenAI-compatible SPI providers.
 
+use std::path::PathBuf;
+
 use serde_json::{json, Value};
 
 use crate::error::McpError;
@@ -7,6 +9,28 @@ use crate::vo::{
     LlmChatMessage, LlmEndpointConfig, LlmHttpRequest, LlmToolInvocation, LlmToolSchema,
     LlmTurnResponse,
 };
+
+pub(super) fn home_dir() -> Option<PathBuf> {
+    non_empty_env("USERPROFILE")
+        .or_else(|| non_empty_env("HOME"))
+        .map(PathBuf::from)
+}
+
+pub(super) fn read_json_string_path(rel_path: &[&str], json_path: &[&str]) -> Option<String> {
+    let mut path = home_dir()?;
+    for seg in rel_path {
+        path.push(seg);
+    }
+    let raw = std::fs::read_to_string(path).ok()?;
+    let mut cur: Value = serde_json::from_str(&raw).ok()?;
+    for key in json_path {
+        cur = cur.get(*key)?.clone();
+    }
+    cur.as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
 
 pub(super) fn non_empty_env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
@@ -66,14 +90,18 @@ pub(super) fn build_openai_compatible_request(
                         .map(|tc| {
                             let args_str = serde_json::to_string(&tc.arguments)
                                 .unwrap_or_else(|_| "{}".to_string());
-                            json!({
+                            let mut call_obj = json!({
                                 "id": tc.id,
                                 "type": "function",
                                 "function": {
                                     "name": tc.name,
                                     "arguments": args_str
                                 }
-                            })
+                            });
+                            if let Some(extra) = &tc.extra_content {
+                                call_obj["extra_content"] = extra.clone();
+                            }
+                            call_obj
                         })
                         .collect();
                     obj["tool_calls"] = Value::Array(wire_calls);
@@ -143,10 +171,12 @@ pub(super) fn parse_openai_compatible_response(body: &Value) -> Result<LlmTurnRe
             Some(Value::Object(map)) => Value::Object(map.clone()),
             _ => json!({}),
         };
+        let extra_content = tc.get("extra_content").cloned();
         tool_calls.push(LlmToolInvocation {
             id,
             name,
             arguments,
+            extra_content,
         });
     }
 

@@ -4,7 +4,8 @@ use serde_json::Value;
 
 use crate::error::McpError;
 use crate::spi::openai_wire::{
-    build_openai_compatible_request, first_env_with_source, parse_openai_compatible_response,
+    build_openai_compatible_request, non_empty_env, parse_openai_compatible_response,
+    read_json_string_path,
 };
 use crate::traits::LlmProviderSpi;
 use crate::vo::{
@@ -21,7 +22,19 @@ impl LlmProviderSpi for OpenAiProvider {
     }
 
     fn resolve_credentials(&self) -> Option<LlmEndpointConfig> {
-        let (key, source) = first_env_with_source(&["OPENAI_OAUTH_TOKEN", "OPENAI_API_KEY"])?;
+        let (key, source) = non_empty_env("OPENAI_OAUTH_TOKEN")
+            .map(|k| (k, "env:OPENAI_OAUTH_TOKEN".to_string()))
+            .or_else(|| {
+                read_json_string_path(&[".codex", "auth.json"], &["tokens", "access_token"])
+                    .map(|k| (k, "codex-oauth".to_string()))
+            })
+            .or_else(|| {
+                non_empty_env("OPENAI_API_KEY").map(|k| (k, "env:OPENAI_API_KEY".to_string()))
+            })
+            .or_else(|| {
+                read_json_string_path(&[".codex", "auth.json"], &["OPENAI_API_KEY"])
+                    .map(|k| (k, "codex-api-key".to_string()))
+            })?;
 
         Some(LlmEndpointConfig {
             provider_id: self.provider_id().to_string(),

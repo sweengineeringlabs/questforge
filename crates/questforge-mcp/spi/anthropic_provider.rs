@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::error::McpError;
-use crate::spi::openai_wire::first_env_with_source;
+use crate::spi::openai_wire::{non_empty_env, read_json_string_path};
 use crate::traits::LlmProviderSpi;
 use crate::vo::{
     LlmChatMessage, LlmEndpointConfig, LlmHttpRequest, LlmToolInvocation, LlmToolSchema,
@@ -20,7 +20,18 @@ impl LlmProviderSpi for AnthropicProvider {
     }
 
     fn resolve_credentials(&self) -> Option<LlmEndpointConfig> {
-        let (key, source) = first_env_with_source(&["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])?;
+        let (key, source) = non_empty_env("ANTHROPIC_OAUTH_TOKEN")
+            .map(|k| (k, "env:ANTHROPIC_OAUTH_TOKEN".to_string()))
+            .or_else(|| {
+                read_json_string_path(
+                    &[".claude", ".credentials.json"],
+                    &["claudeAiOauth", "accessToken"],
+                )
+                .map(|k| (k, "claude-oauth".to_string()))
+            })
+            .or_else(|| {
+                non_empty_env("ANTHROPIC_API_KEY").map(|k| (k, "env:ANTHROPIC_API_KEY".to_string()))
+            })?;
 
         Some(LlmEndpointConfig {
             provider_id: self.provider_id().to_string(),
@@ -165,6 +176,7 @@ impl LlmProviderSpi for AnthropicProvider {
                         id,
                         name,
                         arguments,
+                        extra_content: None,
                     });
                 }
                 _ => {}

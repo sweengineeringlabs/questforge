@@ -191,9 +191,15 @@ impl QuestXrAgent {
                 for (header, val) in &http_req.headers {
                     req = req.set(header, val);
                 }
-                let resp = req
-                    .send_string(&http_req.body.to_string())
-                    .map_err(|err| std::io::Error::other(format!("LLM HTTP error: {err}")))?;
+                let resp =
+                    req.send_string(&http_req.body.to_string())
+                        .map_err(|err| match err {
+                            ureq::Error::Status(code, r) => {
+                                let body = r.into_string().unwrap_or_default();
+                                std::io::Error::other(format!("LLM HTTP {code}: {body}"))
+                            }
+                            other => std::io::Error::other(format!("LLM HTTP error: {other}")),
+                        })?;
                 let raw = resp
                     .into_string()
                     .map_err(|err| std::io::Error::other(format!("LLM read error: {err}")))?;

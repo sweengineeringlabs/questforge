@@ -257,6 +257,7 @@ fn test_anthropic_spi_wire_format_and_auth_headers_happy() {
                 id: "toolu_1".to_string(),
                 name: "check_source".to_string(),
                 arguments: json!({"project_dir": "."}),
+                extra_content: None,
             }],
         },
         LlmChatMessage::ToolResult {
@@ -433,4 +434,75 @@ fn test_custom_llm_provider_spi_implementation_happy() {
         panic!("custom SPI run");
     };
     assert_eq!(report.final_answer, "pong from custom SPI");
+}
+
+#[test]
+#[ignore = "Requires live network and real provider OAuth/API credentials"]
+fn test_live_all_three_providers_real_oauth_e2e() {
+    let quest_bin = std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            p.parent()
+                .and_then(|d| d.parent())
+                .map(|d| d.join("quest.exe"))
+        })
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| std::path::PathBuf::from("quest"));
+
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let proj = dir.path().join("live-quest");
+    assert!(ProjectScaffolder::scaffold(&InitOptions {
+        target_dir: proj.clone(),
+        name: "live-quest".to_string(),
+        package_id: "com.acme.livequest".to_string(),
+        engine: EngineKind::Rust,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    })
+    .is_ok());
+
+    let providers: [&dyn LlmProviderSpi; 3] =
+        [&GeminiProvider, &OpenAiProvider, &AnthropicProvider];
+
+    let mut failures = Vec::new();
+    for provider in providers {
+        let id = provider.provider_id();
+        let Some(cfg) = provider.resolve_credentials() else {
+            failures.push(format!("{id}: resolve_credentials returned None"));
+            continue;
+        };
+        eprintln!(
+            "[live-test] provider={id} auth_source={} model={} url={}",
+            cfg.auth_source, cfg.default_model, cfg.endpoint_url
+        );
+        match QuestXrAgent::run_llm_stdio_client_with_spi(
+            &quest_bin,
+            &proj,
+            "Run check_source on this project and summarize in 1 sentence.",
+            4,
+            provider,
+            &cfg,
+        ) {
+            Ok(report) => {
+                eprintln!(
+                    "[live-test] provider={id} OK steps={} answer={:?}",
+                    report.steps.len(),
+                    report.final_answer
+                );
+            }
+            Err(err) => {
+                eprintln!("[live-test] provider={id} ERR: {err}");
+                failures.push(format!("{id} ({}): {err}", cfg.auth_source));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "Live provider failures: {}",
+        failures.join(" | ")
+    );
 }
