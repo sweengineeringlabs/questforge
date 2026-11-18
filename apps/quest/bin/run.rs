@@ -494,12 +494,12 @@ enum OpsAction {
     },
     /// Execute any 1:1 `ovr-platform-util` Meta Horizon Store operation
     Store {
-        /// Store operation (`upload-quest-build`, `upload-dlc-build`, `upload-debug-symbols`, `set-release-channel-build`, `list-builds`, `download-build`)
+        /// Store operation (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`)
         #[arg(long, value_enum)]
         action: CliOvrStoreAction,
-        /// Meta Horizon App ID
+        /// Meta Horizon App ID (required for all actions except `version`)
         #[arg(long)]
-        app_id: String,
+        app_id: Option<String>,
         /// Optional APK path (`upload-quest-build`)
         #[arg(long)]
         apk: Option<PathBuf>,
@@ -1586,7 +1586,7 @@ fn run_ops(args: OpsArgs) -> ExitCode {
             let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
             let req = OvrStoreRequest {
                 action: action.into(),
-                app_id,
+                app_id: app_id.unwrap_or_default(),
                 app_secret,
                 apk_path: apk,
                 channel,
@@ -1604,13 +1604,21 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                             serde_json::to_string_pretty(&receipt).unwrap_or_default()
                         );
                     } else {
+                        let app_id_display = if receipt.app_id.is_empty() {
+                            "-"
+                        } else {
+                            receipt.app_id.as_str()
+                        };
                         println!(
                             "Meta Store {} succeeded (app_id: {}, channel: {}, build_id: {})",
                             receipt.action.as_subcommand(),
-                            receipt.app_id,
+                            app_id_display,
                             receipt.channel.as_deref().unwrap_or("-"),
                             receipt.build_id.as_deref().unwrap_or("-")
                         );
+                        if !receipt.stdout.is_empty() {
+                            println!("{}", receipt.stdout);
+                        }
                     }
                     ExitCode::SUCCESS
                 }
