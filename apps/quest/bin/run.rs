@@ -9,6 +9,7 @@ use questforge_config::EngineKind;
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
+use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -31,6 +32,8 @@ enum Commands {
     Init(InitArgs),
     /// Build, package, generate SBOM, and publish Quest APK artifacts
     Ci(CiArgs),
+    /// Verify APK release readiness, signatures, ABIs, and Meta VRC policy compliance
+    Verify(VerifyArgs),
 }
 
 #[derive(Debug, Args)]
@@ -164,6 +167,42 @@ struct CiArgs {
     json: bool,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliReportFormat {
+    Cli,
+    Json,
+    Sarif,
+    Html,
+    Pdf,
+}
+
+impl From<CliReportFormat> for ReportFormat {
+    fn from(value: CliReportFormat) -> Self {
+        match value {
+            CliReportFormat::Cli => Self::Cli,
+            CliReportFormat::Json => Self::Json,
+            CliReportFormat::Sarif => Self::Sarif,
+            CliReportFormat::Html => Self::Html,
+            CliReportFormat::Pdf => Self::Pdf,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct VerifyArgs {
+    /// Path to the APK artifact to verify
+    apk: PathBuf,
+    /// Optional directory containing quest_forge.yaml
+    #[arg(long)]
+    project_dir: Option<PathBuf>,
+    /// Output report format
+    #[arg(long, value_enum, default_value_t = CliReportFormat::Cli)]
+    format: CliReportFormat,
+    /// Write report output to a file instead of stdout
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -177,6 +216,7 @@ impl Runner {
             Commands::Doctor(args) => run_doctor(args),
             Commands::Init(args) => run_init(args),
             Commands::Ci(args) => run_ci(args),
+            Commands::Verify(args) => run_verify(args),
         }
     }
 }
@@ -389,6 +429,45 @@ fn run_ci(args: CiArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest ci failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_verify(args: VerifyArgs) -> ExitCode {
+    let opts = VerifyOptions {
+        apk_path: args.apk,
+        project_dir: args.project_dir,
+        max_apk_bytes: None,
+    };
+
+    match ApkVerifier::verify(&opts) {
+        Ok(report) => {
+            let fmt: ReportFormat = args.format.into();
+            match report.render_bytes(fmt) {
+                Ok(bytes) => {
+                    if let Some(out_path) = args.out {
+                        if let Err(err) = std::fs::write(&out_path, &bytes) {
+                            eprintln!("failed to write report '{}': {err}", out_path.display());
+                            return ExitCode::FAILURE;
+                        }
+                    } else {
+                        print!("{}", String::from_utf8_lossy(&bytes));
+                    }
+                }
+                Err(err) => {
+                    eprintln!("failed to render report: {err}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            if report.has_failures() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(err) => {
+            eprintln!("quest verify failed: {err}");
             ExitCode::FAILURE
         }
     }

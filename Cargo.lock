@@ -532,6 +532,7 @@ dependencies = [
  "questforge-doctor",
  "questforge-init",
  "questforge-toolchain",
+ "questforge-verify",
  "serde_json",
 ]
 
@@ -605,6 +606,21 @@ dependencies = [
  "tempfile",
  "thiserror",
  "ureq",
+ "zip",
+]
+
+[[package]]
+name = "questforge-verify"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "questforge-api",
+ "questforge-config",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
  "zip",
 ]
 

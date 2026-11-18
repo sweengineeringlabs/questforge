@@ -20,6 +20,7 @@ questforge-config.workspace = true
 questforge-doctor.workspace = true
 questforge-init.workspace = true
 questforge-toolchain.workspace = true
+questforge-verify.workspace = true
 serde_json.workspace = true
 
 [lints]

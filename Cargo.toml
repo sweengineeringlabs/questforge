@@ -5,6 +5,7 @@ members = [
     "crates/questforge-ci",
     "crates/questforge-config",
     "crates/questforge-toolchain",
+    "crates/questforge-verify",
     "crates/questforge-doctor",
     "crates/questforge-init",
     "apps/quest",
@@ -29,6 +30,7 @@ questforge-api       = { path = "crates/questforge-api" }
 questforge-ci        = { path = "crates/questforge-ci" }
 questforge-config    = { path = "crates/questforge-config" }
 questforge-toolchain = { path = "crates/questforge-toolchain" }
+questforge-verify    = { path = "crates/questforge-verify" }
 questforge-doctor    = { path = "crates/questforge-doctor" }
 questforge-init      = { path = "crates/questforge-init" }
 

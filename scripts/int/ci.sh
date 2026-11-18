@@ -28,6 +28,7 @@ swartch --vocabulary config/vocabulary.toml \
     crates/questforge-ci \
     crates/questforge-config \
     crates/questforge-toolchain \
+    crates/questforge-verify \
     crates/questforge-doctor \
     crates/questforge-init \
     apps/quest
