@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::EngineKind;
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
@@ -28,6 +29,8 @@ enum Commands {
     Doctor(DoctorArgs),
     /// Scaffold a Quest-ready Unity or Unreal repository
     Init(InitArgs),
+    /// Build, package, generate SBOM, and publish Quest APK artifacts
+    Ci(CiArgs),
 }
 
 #[derive(Debug, Args)]
@@ -116,6 +119,51 @@ struct InitArgs {
     json: bool,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliCiProvider {
+    Github,
+    Azure,
+    Jenkins,
+}
+
+impl From<CliCiProvider> for CiProvider {
+    fn from(value: CliCiProvider) -> Self {
+        match value {
+            CliCiProvider::Github => Self::Github,
+            CliCiProvider::Azure => Self::Azure,
+            CliCiProvider::Jenkins => Self::Jenkins,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct CiArgs {
+    /// Directory containing quest_forge.yaml (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    project_dir: PathBuf,
+    /// Output directory for APK, build-metadata.json, and sbom.cdx.json
+    #[arg(long, default_value = "dist")]
+    output_dir: PathBuf,
+    /// Release version string
+    #[arg(long, default_value = "0.1.0")]
+    release_version: String,
+    /// Optional Meta Horizon Store channel (e.g. ALPHA, RC, LIVE)
+    #[arg(long)]
+    upload_channel: Option<String>,
+    /// Optional Meta App ID for ovr-platform-util upload
+    #[arg(long)]
+    app_id: Option<String>,
+    /// Emit a starter CI pipeline template instead of running a build
+    #[arg(long, value_enum)]
+    emit_pipeline: Option<CliCiProvider>,
+    /// Plan build, generate metadata and SBOM without executing engine build
+    #[arg(long)]
+    dry_run: bool,
+    /// Emit machine-readable JSON output
+    #[arg(long)]
+    json: bool,
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -128,6 +176,7 @@ impl Runner {
             Commands::Setup(args) => run_setup(args),
             Commands::Doctor(args) => run_doctor(args),
             Commands::Init(args) => run_init(args),
+            Commands::Ci(args) => run_ci(args),
         }
     }
 }
@@ -162,7 +211,11 @@ fn run_setup(args: SetupArgs) -> ExitCode {
                     report.cache_root.display()
                 );
                 for tool in &report.tools {
-                    let status = if tool.cache_hit { "cached" } else { "installed" };
+                    let status = if tool.cache_hit {
+                        "cached"
+                    } else {
+                        "installed"
+                    };
                     println!(
                         "  - {} {} [{}]: {}",
                         tool.tool.dir_name(),
@@ -286,6 +339,56 @@ fn run_init(args: InitArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest init failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_ci(args: CiArgs) -> ExitCode {
+    if let Some(provider) = args.emit_pipeline {
+        print!(
+            "{}",
+            CiOrchestrator::render_pipeline_template(provider.into())
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    let opts = CiOptions {
+        project_dir: args.project_dir,
+        output_dir: args.output_dir,
+        release_version: args.release_version,
+        upload_channel: args.upload_channel,
+        app_id: args.app_id,
+        dry_run: args.dry_run,
+    };
+
+    match CiOrchestrator::run(&opts) {
+        Ok(report) => {
+            if args.json {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(err) => {
+                        eprintln!("failed to serialize ci report: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                println!(
+                    "QuestForge CI {} ({})",
+                    if args.dry_run { "planned" } else { "succeeded" },
+                    report.metadata.apk_path.display()
+                );
+                println!("  - metadata: {}", report.metadata_path.display());
+                println!("  - sbom:     {}", report.sbom_path.display());
+                println!(
+                    "  - findings: {} advisory notice(s)",
+                    report.vulnerabilities.len()
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("quest ci failed: {err}");
             ExitCode::FAILURE
         }
     }

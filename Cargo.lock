@@ -527,6 +527,7 @@ name = "quest"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "questforge-ci",
  "questforge-config",
  "questforge-doctor",
  "questforge-init",
@@ -538,6 +539,20 @@ dependencies = [
 name = "questforge-api"
 version = "0.1.0"
 dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "questforge-ci"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "questforge-api",
+ "questforge-config",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
  "thiserror",
 ]
 

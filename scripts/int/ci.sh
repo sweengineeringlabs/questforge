@@ -25,6 +25,7 @@ printf "${BOLD}=== Executing Vendor-Agnostic CI Integration Suite ===${RESET}\n\
 log_info "Step 1/4: Running architectural audit (swartch)..."
 swartch --vocabulary config/vocabulary.toml \
     crates/questforge-api \
+    crates/questforge-ci \
     crates/questforge-config \
     crates/questforge-toolchain \
     crates/questforge-doctor \

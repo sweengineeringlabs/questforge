@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/questforge-api",
+    "crates/questforge-ci",
     "crates/questforge-config",
     "crates/questforge-toolchain",
     "crates/questforge-doctor",
@@ -25,6 +26,7 @@ expect_used = "warn"
 
 [workspace.dependencies]
 questforge-api       = { path = "crates/questforge-api" }
+questforge-ci        = { path = "crates/questforge-ci" }
 questforge-config    = { path = "crates/questforge-config" }
 questforge-toolchain = { path = "crates/questforge-toolchain" }
 questforge-doctor    = { path = "crates/questforge-doctor" }
