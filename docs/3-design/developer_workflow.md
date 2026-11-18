@@ -19,15 +19,15 @@ flowchart TD
     end
 
     subgraph CLI["QuestForge CLI (quest)"]
-        Init["quest init"]
-        Sync["quest sync (Declarative XR Codegen)"]
-        Check["quest check (Static VRC & Frame-Budget Linter)"]
+        Init["quest init (unity | unreal | rust)"]
+        Sync["quest sync (XR + OpenXR Codegen)"]
+        Check["quest check (SPEC/SYNC/VRC/OXR/PERF)"]
         Setup["quest setup (Zero-Trust SHA-256)"]
         Doctor["quest doctor --fix (QD-001..QD-009)"]
-        MCP["quest mcp (JSON-RPC 2.0 Server)"]
+        MCP["quest mcp (9 JSON-RPC 2.0 Tools)"]
         CI["quest ci (Build + CycloneDX SBOM)"]
         Verify["quest verify (QV-001..QV-006)"]
-        Ops["quest ops (Fleet & ADB Manager)"]
+        Ops["quest ops (ADB Fleet + hms-push)"]
     end
 
     subgraph ControlPlane["QuestForge Control Plane"]
@@ -37,8 +37,9 @@ flowchart TD
     end
 
     subgraph Targets["Execution & Distribution Targets"]
-        Headsets["Meta Quest Fleet & Emulators"]
+        Headsets["Meta Quest Fleet & OpenXR Simulator"]
         Store["Meta Horizon Store (ALPHA / BETA / RC / PROD)"]
+        HMS["Meta HMS / ManageXR / ArborXR (Enterprise MDM)"]
     end
 
     Dev --> Init
@@ -65,6 +66,7 @@ flowchart TD
     QA --> Ops
     QA --> Web
     Ops --> Headsets
+    Ops --> HMS
 
     Ent --> Serve
     Ent --> Web

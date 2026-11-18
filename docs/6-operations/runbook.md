@@ -88,11 +88,19 @@ Open `http://127.0.0.1:8090/` to inspect `orbit-pulse-vr`, its build, its `100/1
 
 ---
 
-## 5. Running the Lab Fleet Agent (`quest ops agent`)
+## 5. Running the Lab Fleet Agent & Enterprise MDM Push (`quest ops`)
+
+QuestForge complements enterprise MDMs (Meta HMS, ManageXR, ArborXR): `quest ops` manages engineering/QA lab headsets over ADB, while `quest ops hms-push` promotes verified APKs into enterprise MDMs for production OTA kiosk rollout.
 
 On a lab host with Quest headsets or an Android emulator (`../mobile-emulator`) connected via `adb`:
 ```pwsh
 quest ops agent --server http://127.0.0.1:8090 --group qa-lab
+```
+
+Push a verified `100/100` APK to Meta HMS, ManageXR, or ArborXR:
+```pwsh
+$env:QUESTFORGE_MDM_TOKEN = "<mdm-bearer-token>"
+quest ops hms-push --provider meta-hms --app-id <app-id> --apk dist/orbit-pulse-vr-1.0.0.apk --channel PRODUCTION --group training-floor
 ```
 
 ---

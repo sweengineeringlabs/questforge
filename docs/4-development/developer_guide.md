@@ -1,66 +1,71 @@
 # QuestForge Developer Guide
 
-Guide for both **Quest / Horizon OS application developers** using the `quest` CLI and **platform contributors** developing QuestForge itself.
+Guide for **XR Application Developers** building Meta Quest apps and **Platform Contributors** developing QuestForge itself.
 
 ---
 
-## Part 1: For Quest / Horizon OS App Developers
+## Part 1: XR Application Developers (`unity` | `unreal` | `rust`)
 
-### 1. Initialize a New Quest Project
+### 1. Scaffold & Sync Declarative XR Projects
 ```pwsh
-quest init my-quest-app --engine unity --package-id com.acme.myquestapp
+# Scaffold Unity, Unreal, or Native Rust OpenXR
+quest init my-quest-app --engine rust --package-id com.studio.myquestapp
+
+# Edit quest_forge.yaml (xr_features) and specs/*_xr.yaml, then regenerate
+quest sync --project-dir my-quest-app
 ```
-What `quest init` generates for Unity:
-- `quest_forge.yaml` — single source of truth for engine, SDK/NDK/JDK, target Quest devices, and signing env vars
-- `ProjectSettings/ProjectVersion.txt` & `Packages/manifest.json` (`com.meta.xr.sdk.all`, `com.unity.xr.openxr`)
-- `Assets/Editor/QuestForgeBuild.cs` — headless Unity IL2CPP ARM64 builder (`QuestForge.Build.BuildQuestApk`) invoked automatically by `quest ci`
-- `.gitignore` & `.gitattributes` (Git LFS rules for `.fbx`, `.png`, `.wav`, `.apk`, `.asset`)
-- `scripts/ci.sh` — vendor-agnostic CI script
+`quest sync` generates VRC-compliant `AndroidManifest.xml`, Horizon OS OpenXR extension bindings (`XR_FB_display_refresh_rate`, `XR_FB_passthrough`, `XR_EXT_hand_tracking`, `XR_FB_foveation`, `XR_FB_spatial_entity`), and strongly-typed action interfaces (`IMainArenaXrActions` / `MainArenaXrActions`).
 
-### 2. Provision Toolchain & Check Your Workstation
+### 2. Static Checks, Toolchain Setup & Diagnostics
 ```pwsh
-# Install adb into ~/.questforge/cache (pass --adb-sha256 for zero-trust verification)
-quest setup --adb-version latest --adb-sha256 <sha256>
+# Sub-second static gates (QF-SPEC-001, QF-SYNC-001, QF-VRC-001, QF-OXR-001, QF-PERF-001)
+quest check --project-dir my-quest-app
 
-# Run QD-001..QD-009 diagnostics
-quest doctor --project-dir my-quest-app
+# Provision verified binaries & check workstation (including XR_RUNTIME_JSON)
+quest setup --adb-version latest --allow-unverified
+quest doctor --fix --project-dir my-quest-app
 ```
 
-### 3. Build, Generate SBOM, and Verify APK Before Store Upload
+### 3. Build, SBOM & Store Verification
 ```pwsh
-# Build APK + build-metadata.json + sbom.cdx.json
 quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-version 1.0.0
-
-# Audit APK against Meta Horizon Store VRC rules (QV-001..QV-006)
 quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app --format html --out scorecard.html
 ```
 
-### 4. Use with AI Coding Agents (`quest mcp`)
-Configure your MCP-compatible IDE/agent to run:
-```json
-{
-  "mcpServers": {
-    "questforge": {
-      "command": "quest",
-      "args": ["mcp", "--workspace-root", "."]
-    }
-  }
-}
+### 4. Showcase App (`examples/orbit-pulse-vr`)
+Inspect [examples/orbit-pulse-vr](file:///c:/phd-systems/swelabs/metaquest/examples/orbit-pulse-vr/quest_forge.yaml) for a working Native Rust OpenXR project:
+```pwsh
+cargo test --manifest-path examples/orbit-pulse-vr/Cargo.toml
+quest check --project-dir examples/orbit-pulse-vr
 ```
 
 ---
 
-## Part 2: For QuestForge Contributors
+## Part 2: QuestForge Contributors
 
-### Toolchain Requirements
-- Rust `1.100.0` (`rust-toolchain.toml`)
-- `swartch` CLI (Architecture 4.0 enforcement)
-- Bun `1.4.2` + `mweb` CLI (`machineweb`) + `csslense`
-
-### Running All Verification Gates
-```pwsh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questforge-ci crates/questforge-config crates/questforge-toolchain crates/questforge-verify crates/questforge-doctor crates/questforge-init crates/questforge-mcp crates/questforge-ops crates/questforge-server apps/quest
+### Workspace Structure (`swartch` Architecture 4.0)
+```text
+metaquest/
+├── apps/quest/              # CLI binary (bin/run.rs)
+├── crates/
+│   ├── questforge-api/      # Domain contracts (api)
+│   └── questforge-*/        # Domain crates (lib: lib.rs, error/, vo/, tests/)
+├── examples/orbit-pulse-vr/ # Showcase Native Rust OpenXR app
+└── web/                     # machineweb (mweb) + Bun + TypeScript dashboard
 ```
+
+### Key Conventions
+- **Rust `1.100.0`:** Pinned in `rust-toolchain.toml`; `#![deny(unsafe_code)]`; no `.unwrap()`/`.expect()` outside tests.
+- **Privacy & Re-exports:** Keep `mod error;` and `mod vo;` private in `lib.rs`, re-export public types at crate root, and preserve `compile_fail` doctests.
+- **Verification Gates:**
+  ```pwsh
+  cargo fmt --all -- --check
+  cargo clippy --workspace --all-targets -- -D warnings
+  cargo test --workspace
+  swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questforge-config crates/questforge-toolchain crates/questforge-doctor crates/questforge-init crates/questforge-ci crates/questforge-verify crates/questforge-mcp crates/questforge-ops crates/questforge-server apps/quest
+  ```
+
+### See Also
+- [Architecture](../3-design/architecture.md)
+- [Workflows (All Actors)](../3-design/developer_workflow.md)
+- [Operations Runbook](../6-operations/runbook.md)
