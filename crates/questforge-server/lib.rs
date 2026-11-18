@@ -1,6 +1,6 @@
 //! # questforge-server
 //!
-//! Hosted control plane REST API, RBAC, audit logging, and metrics for QuestForge.
+//! Hosted control plane REST API, swappable storage, JWT/RBAC, audit logging, and metrics.
 //!
 //! ```compile_fail
 //! use questforge_server::error::ServerError;
@@ -17,6 +17,7 @@ mod vo;
 
 pub use self::error::ServerError;
 pub use self::vo::{
-    AuditLogEntry, BuildRecord, ControlPlaneServer, ControlPlaneState, HttpRequest, HttpResponse,
-    ProjectRecord, Role, VerificationRecord,
+    AuditLogEntry, AuthMode, BuildRecord, ControlPlaneServer, ControlPlaneState, HttpRequest,
+    HttpResponse, JwtVerifier, PostgresStore, ProjectRecord, Role, StoreBackend,
+    VerificationRecord,
 };

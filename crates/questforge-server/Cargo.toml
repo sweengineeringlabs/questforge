@@ -14,11 +14,15 @@ package_kind = "lib"
 domain = "questforge"
 
 [dependencies]
+base64.workspace = true
+hmac.workspace = true
+postgres.workspace = true
 questforge-api.workspace = true
 questforge-ops.workspace = true
 questforge-verify.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

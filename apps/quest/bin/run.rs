@@ -10,7 +10,7 @@ use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::QuestMcpServer;
 use questforge_ops::{FleetInventory, FleetManager, OpsEnv};
-use questforge_server::ControlPlaneServer;
+use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
 
@@ -297,6 +297,15 @@ enum OpsAction {
         #[arg(long, default_value = "screenshot.png")]
         out: PathBuf,
     },
+    /// Poll questforge-server for scheduled deployments and execute them on local devices
+    Agent {
+        /// Control plane base URL
+        #[arg(long, default_value = "http://127.0.0.1:8080")]
+        server: String,
+        /// Default group for discovered devices
+        #[arg(long, default_value = "qa-lab")]
+        group: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -307,6 +316,12 @@ struct ServeArgs {
     /// Optional directory serving machineweb (mweb) dashboard assets
     #[arg(long)]
     web_root: Option<PathBuf>,
+    /// Optional PostgreSQL connection URL (or QUESTFORGE_DATABASE_URL env var)
+    #[arg(long)]
+    database_url: Option<String>,
+    /// Optional HS256 JWT secret (or QUESTFORGE_JWT_SECRET env var)
+    #[arg(long)]
+    jwt_secret: Option<String>,
 }
 
 /// Command-line runner for `quest`.
@@ -764,11 +779,58 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 }
             }
         }
+        OpsAction::Agent { server, group } => {
+            match FleetManager::poll_server_once(&mut inv, &server, &group, &env) {
+                Ok(report) => {
+                    if let Err(err) = inv.save(&args.registry) {
+                        eprintln!("failed to save registry: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&report).unwrap_or_default()
+                        );
+                    } else {
+                        println!(
+                            "Agent sync complete: {} device(s) discovered, {} deployment(s) executed",
+                            report.discovered,
+                            report.executed_deployments.len()
+                        );
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops agent failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
     }
 }
 
 fn run_serve(args: ServeArgs) -> ExitCode {
-    let server = ControlPlaneServer::new(args.web_root);
+    let db_url = args
+        .database_url
+        .or_else(|| std::env::var("QUESTFORGE_DATABASE_URL").ok());
+    let store = match db_url {
+        Some(url) => match PostgresStore::connect(&url) {
+            Ok(pg) => StoreBackend::Postgres(std::sync::Arc::new(pg)),
+            Err(err) => {
+                eprintln!("quest serve failed to connect to PostgreSQL: {err}");
+                return ExitCode::FAILURE;
+            }
+        },
+        None => StoreBackend::default(),
+    };
+    let jwt_secret = args
+        .jwt_secret
+        .or_else(|| std::env::var("QUESTFORGE_JWT_SECRET").ok());
+    let auth = match jwt_secret {
+        Some(secret) => AuthMode::Jwt(JwtVerifier::new(secret.into_bytes())),
+        None => AuthMode::DevHeader,
+    };
+    let server = ControlPlaneServer::with_backend(store, auth, args.web_root);
     println!("QuestForge control plane listening on http://{}", args.addr);
     match server.serve(&args.addr) {
         Ok(()) => ExitCode::SUCCESS,

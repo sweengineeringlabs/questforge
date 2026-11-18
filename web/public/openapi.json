@@ -1,7 +1,76 @@
 {
   "components": {
     "schemas": {
-      "DashboardData": {
+      "AuditLogEntry": {
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "status_code": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "role",
+          "seq",
+          "status_code"
+        ],
+        "type": "object"
+      },
+      "BuildRecord": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "status",
+          "version"
+        ],
+        "type": "object"
+      },
+      "DeploymentRecord": {
+        "properties": {
+          "apk_path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apk_path",
+          "status",
+          "target"
+        ],
+        "type": "object"
+      },
+      "ProjectRecord": {
         "properties": {
           "id": {
             "type": "string"
@@ -9,13 +78,35 @@
           "name": {
             "type": "string"
           },
-          "status": {
+          "owner": {
+            "type": "string"
+          },
+          "repository": {
             "type": "string"
           }
         },
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "VerificationRecord": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "score": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "ready",
+          "score"
         ],
         "type": "object"
       }
@@ -35,16 +126,39 @@
   },
   "openapi": "3.0.0",
   "paths": {
-    "/dashboard": {
+    "/api/audit": {
       "get": {
-        "operationId": "listDashboard",
+        "operationId": "listAudit",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DashboardData"
+                    "$ref": "#/components/schemas/AuditLogEntry"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/api/builds": {
+      "get": {
+        "operationId": "listBuilds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BuildRecord"
                   },
                   "type": "array"
                 }
@@ -58,13 +172,13 @@
         ]
       },
       "post": {
-        "operationId": "createDashboard",
+        "operationId": "createBuild",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DashboardData"
+                  "$ref": "#/components/schemas/BuildRecord"
                 }
               }
             },
@@ -76,15 +190,100 @@
         ]
       }
     },
-    "/dashboard/{{id}}": {
+    "/api/deployments": {
       "get": {
-        "operationId": "getDashboard",
+        "operationId": "listDeployments",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DashboardData"
+                  "items": {
+                    "$ref": "#/components/schemas/DeploymentRecord"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      },
+      "post": {
+        "operationId": "createDeployment",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentRecord"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "operationId": "listProjects",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectRecord"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      },
+      "post": {
+        "operationId": "createProject",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectRecord"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/api/reports": {
+      "get": {
+        "operationId": "listReports",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VerificationRecord"
+                  },
+                  "type": "array"
                 }
               }
             },

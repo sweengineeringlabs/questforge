@@ -1,38 +1,104 @@
-# Feature API schema — run: mweb generate app
-# Generates: src/dashboard_types.gen.ts, src/dashboard_api.gen.ts, src/dashboard_mock.gen.ts
+# QuestForge Control Plane API schema — run: mweb generate app
 feature: dashboard
 
 types:
-  DashboardData:
+  ProjectRecord:
     fields:
       id: { type: string, required: true }
       name: { type: string, required: true }
-      status: { type: string }
+      repository: { type: string }
+      owner: { type: string }
+
+  BuildRecord:
+    fields:
+      id: { type: string, required: true }
+      project_id: { type: string, required: true }
+      status: { type: string, required: true }
+      version: { type: string, required: true }
+
+  VerificationRecord:
+    fields:
+      id: { type: string, required: true }
+      score: { type: number, required: true }
+      ready: { type: boolean, required: true }
+
+  DeploymentRecord:
+    fields:
+      target: { type: string, required: true }
+      apk_path: { type: string, required: true }
+      status: { type: string, required: true }
+
+  AuditLogEntry:
+    fields:
+      seq: { type: number, required: true }
+      role: { type: string, required: true }
+      method: { type: string, required: true }
+      path: { type: string, required: true }
+      status_code: { type: number, required: true }
 
 api:
   - method: GET
-    path: /dashboard
-    operation: listDashboard
-    returns: DashboardData[]
-
-  - method: GET
-    path: /dashboard/{{id}}
-    operation: getDashboard
-    returns: DashboardData
+    path: /api/projects
+    operation: listProjects
+    returns: ProjectRecord[]
 
   - method: POST
-    path: /dashboard
-    operation: createDashboard
-    returns: DashboardData
+    path: /api/projects
+    operation: createProject
+    returns: ProjectRecord
+
+  - method: GET
+    path: /api/builds
+    operation: listBuilds
+    returns: BuildRecord[]
+
+  - method: POST
+    path: /api/builds
+    operation: createBuild
+    returns: BuildRecord
+
+  - method: GET
+    path: /api/reports
+    operation: listReports
+    returns: VerificationRecord[]
+
+  - method: GET
+    path: /api/deployments
+    operation: listDeployments
+    returns: DeploymentRecord[]
+
+  - method: POST
+    path: /api/deployments
+    operation: createDeployment
+    returns: DeploymentRecord
+
+  - method: GET
+    path: /api/audit
+    operation: listAudit
+    returns: AuditLogEntry[]
 
 mock:
-  /dashboard:
-    - id: "ID-001"
-      name: Sipho Mthembu
-      status: active
-    - id: "ID-001 2"
-      name: Sipho Mthembu 2
-      status: active 2
-    - id: "ID-001 3"
-      name: Sipho Mthembu 3
-      status: active 3
+  /api/projects:
+    - id: "proj-1"
+      name: "quest-sample"
+      repository: "https://github.com/sweengineeringlabs/questforge"
+      owner: "xr-platform"
+  /api/builds:
+    - id: "build-1"
+      project_id: "proj-1"
+      status: "succeeded"
+      version: "1.0.0"
+  /api/reports:
+    - id: "rep-1"
+      score: 100
+      ready: true
+  /api/deployments:
+    - target: "qa-lab"
+      apk_path: "dist/quest-sample-1.0.0.apk"
+      status: "deployed"
+  /api/audit:
+    - seq: 1
+      role: "operations_engineer"
+      method: "POST"
+      path: "/api/deployments"
+      status_code: 201

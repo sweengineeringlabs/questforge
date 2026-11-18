@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use questforge_server::{ControlPlaneServer, HttpRequest};
+use questforge_server::{
+    AuthMode, ControlPlaneServer, HttpRequest, JwtVerifier, Role, StoreBackend,
+};
 
 fn make_req(method: &str, path: &str, role: Option<&str>, body: &str) -> HttpRequest {
     let mut headers = BTreeMap::new();
@@ -48,6 +50,10 @@ fn test_server_projects_builds_verify_deployments_and_audit_happy() {
     ));
     assert_eq!(create_dep.status, 201);
 
+    let list_deps = server.handle_request(&make_req("GET", "/api/deployments", None, ""));
+    assert_eq!(list_deps.status, 200);
+    assert!(String::from_utf8_lossy(&list_deps.body).contains("qa-lab"));
+
     let metrics = server.handle_request(&make_req("GET", "/metrics", None, ""));
     assert_eq!(metrics.status, 200);
     assert!(String::from_utf8_lossy(&metrics.body).contains("questforge_projects_total 1"));
@@ -76,4 +82,41 @@ fn test_server_rbac_rejects_unauthorized_and_unauthenticated_error() {
         r#"{"target":"prod"}"#,
     ));
     assert_eq!(forbidden.status, 403);
+}
+
+#[test]
+fn test_server_jwt_auth_enforces_signed_tokens_edge() {
+    let verifier = JwtVerifier::new(b"super-secret-signing-key".to_vec());
+    let server = ControlPlaneServer::with_backend(
+        StoreBackend::default(),
+        AuthMode::Jwt(verifier.clone()),
+        None,
+    );
+
+    let token = verifier.sign_token("amu", Role::Developer, None);
+    assert!(token.is_ok());
+    if let Ok(tok) = token {
+        let mut headers = BTreeMap::new();
+        headers.insert("authorization".to_string(), format!("Bearer {tok}"));
+        let resp = server.handle_request(&HttpRequest {
+            method: "POST".to_string(),
+            path: "/api/projects".to_string(),
+            headers,
+            body: r#"{"name":"jwt-app"}"#.to_string(),
+        });
+        assert_eq!(resp.status, 201);
+    }
+
+    let mut bad_headers = BTreeMap::new();
+    bad_headers.insert(
+        "authorization".to_string(),
+        "Bearer invalid.token.sig".to_string(),
+    );
+    let bad_resp = server.handle_request(&HttpRequest {
+        method: "POST".to_string(),
+        path: "/api/projects".to_string(),
+        headers: bad_headers,
+        body: r#"{"name":"bad"}"#.to_string(),
+    });
+    assert_eq!(bad_resp.status, 401);
 }

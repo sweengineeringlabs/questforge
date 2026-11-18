@@ -16,6 +16,14 @@ pub enum ServerError {
     /// Verification engine error.
     #[error("verify error: {0}")]
     Verify(#[from] questforge_verify::VerifyError),
+
+    /// PostgreSQL storage error.
+    #[error("postgres error: {0}")]
+    Postgres(#[from] postgres::Error),
+
+    /// Authentication or JWT verification error.
+    #[error("auth error: {0}")]
+    Auth(String),
 }
 
 impl From<ServerError> for questforge_api::CrateError {

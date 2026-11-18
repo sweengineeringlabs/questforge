@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use questforge_ops::{AdbOutput, FleetInventory, FleetManager, MockOpsEnv, OpsEnv, OpsError};
+use questforge_ops::{
+    AdbOutput, DeploymentRecord, FleetInventory, FleetManager, MockOpsEnv, OpsEnv, OpsError,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -110,5 +112,36 @@ fn test_ops_rollback_without_previous_apk_error() {
     assert!(matches!(
         res,
         Err(OpsError::NoRollbackTarget { ref serial }) if serial == "quest-01"
+    ));
+}
+
+#[test]
+fn test_ops_agent_executes_matching_scheduled_deployments_happy() {
+    let mut responses = BTreeMap::new();
+    responses.insert(
+        "devices".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"List of devices attached\nemulator-5554\tdevice\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    let env = OpsEnv::Mock(MockOpsEnv { responses });
+    let mut inv = FleetInventory::default();
+    let pending = vec![DeploymentRecord {
+        target: "qa-lab".to_string(),
+        apk_path: Path::new("dist/quest-app.apk").to_path_buf(),
+        scheduled_at: None,
+        status: "scheduled".to_string(),
+        devices: Vec::new(),
+    }];
+
+    let report = FleetManager::sync_agent_with_deployments(&mut inv, "qa-lab", &pending, &env);
+    assert!(matches!(
+        report,
+        Ok(ref r)
+            if r.discovered == 1
+                && r.executed_deployments.len() == 1
+                && r.executed_deployments[0].status == "deployed"
     ));
 }

@@ -7,6 +7,7 @@
 mod control_plane;
 
 pub use self::control_plane::{
-    AuditLogEntry, BuildRecord, ControlPlaneServer, ControlPlaneState, HttpRequest, HttpResponse,
-    ProjectRecord, Role, VerificationRecord,
+    AuditLogEntry, AuthMode, BuildRecord, ControlPlaneServer, ControlPlaneState, HttpRequest,
+    HttpResponse, JwtVerifier, PostgresStore, ProjectRecord, Role, StoreBackend,
+    VerificationRecord,
 };

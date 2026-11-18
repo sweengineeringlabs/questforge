@@ -145,6 +145,15 @@ pub struct MockOpsEnv {
     pub responses: BTreeMap<String, AdbOutput>,
 }
 
+/// Result of a single `quest ops agent` poll-and-execute cycle (`#13`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSyncReport {
+    /// Devices discovered on the lab host.
+    pub discovered: usize,
+    /// Scheduled deployments executed during this cycle.
+    pub executed_deployments: Vec<DeploymentRecord>,
+}
+
 /// Fleet operations controller (`QO-001` through `QO-010`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FleetManager;
@@ -377,6 +386,53 @@ impl FleetManager {
         let out = run_adb_checked(env, &args)?;
         write_artifact(out_path, &out.stdout)?;
         Ok(out_path.to_path_buf())
+    }
+
+    /// Executes one remote lab-agent sync cycle: discovers local devices and applies pending scheduled deployments.
+    pub fn sync_agent_with_deployments(
+        inventory: &mut FleetInventory,
+        default_group: &str,
+        pending: &[DeploymentRecord],
+        env: &OpsEnv,
+    ) -> Result<AgentSyncReport, OpsError> {
+        let discovered = Self::discover(inventory, default_group, env)?.len();
+        let mut executed = Vec::new();
+        for dep in pending {
+            if dep.status == "scheduled" && resolve_target_serials(inventory, &dep.target).is_ok() {
+                let applied = Self::deploy_apk(inventory, &dep.target, &dep.apk_path, None, env)?;
+                executed.push(applied);
+            }
+        }
+        Ok(AgentSyncReport {
+            discovered,
+            executed_deployments: executed,
+        })
+    }
+
+    /// Polls `server_url/api/deployments` over HTTP and executes matching local deployments.
+    pub fn poll_server_once(
+        inventory: &mut FleetInventory,
+        server_url: &str,
+        default_group: &str,
+        env: &OpsEnv,
+    ) -> Result<AgentSyncReport, OpsError> {
+        let url = format!("{}/api/deployments", server_url.trim_end_matches('/'));
+        let resp = ureq::get(&url).call().map_err(|err| OpsError::AdbFailed {
+            args: url.clone(),
+            message: err.to_string(),
+        })?;
+        let raw = resp.into_string().map_err(|err| OpsError::Io {
+            path: PathBuf::from(&url),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()),
+        })?;
+        let payload: serde_json::Value = serde_json::from_str(&raw)?;
+        let pending: Vec<DeploymentRecord> = payload
+            .get("deployments")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default();
+        Self::sync_agent_with_deployments(inventory, default_group, &pending, env)
     }
 }
 

@@ -23,13 +23,13 @@ export const JUSTWEB_MANIFEST = {
       "kind": "feature-api",
       "path": "src/features/dashboard/dashboard_api.gen.ts",
       "schema": "justweb.feature-api/1",
-      "sha256": "033ee001e585654a81c635274058b6058f491e0a7f97f0c055274e0bd3027978"
+      "sha256": "996bcbb956d415f4d3bb74b311a4739e099d64f5efb01b2d615b0f3a667e26d9"
     },
     {
       "kind": "feature-api",
       "path": "src/features/dashboard/dashboard_api_mock.gen.ts",
       "schema": "justweb.feature-api/1",
-      "sha256": "1baa87b452aa3aa93cf011e5cc16d03f7b120ef755abbea4dcfb7e5e2bc29d5a"
+      "sha256": "420e6c6e20a4e4cffc1b5332e5569aaa49e86fd49621173d3d96c8e97e3e7dec"
     },
     {
       "kind": "component-test",
@@ -77,7 +77,7 @@ export const JUSTWEB_MANIFEST = {
       "kind": "feature-api",
       "path": "src/features/dashboard/dashboard_types.gen.ts",
       "schema": "justweb.feature-api/1",
-      "sha256": "9504de21e864d718bf591bead6ce89bbc67f4da1f191f0ddde47be04adf9b181"
+      "sha256": "453c5b11d8d8b3f1841f77bb9ab5902a9ddc0f7b9a79cfaad8526236c870ec7b"
     },
     {
       "kind": "component-mock",

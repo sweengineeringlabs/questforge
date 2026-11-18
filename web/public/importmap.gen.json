@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@preact/signals-core": "/node_modules/@preact/signals-core/dist/signals-core.module.js"
+  }
+}
