@@ -9,6 +9,9 @@ pub use self::anthropic_provider::AnthropicProvider;
 pub use self::gemini_provider::GeminiProvider;
 pub use self::openai_provider::OpenAiProvider;
 
+use std::process::Command;
+
+use crate::error::McpError;
 use crate::traits::LlmProviderSpi;
 use crate::vo::LlmEndpointConfig;
 
@@ -68,5 +71,68 @@ impl AutoLlmCredentialResolver {
         providers
             .iter()
             .find_map(|p| p.resolve_credentials().map(|cfg| (*p, cfg)))
+    }
+
+    /// Runs the provider's interactive OAuth login hook when credentials are missing or `force` is true.
+    pub fn authenticate_provider(
+        provider: &dyn LlmProviderSpi,
+        force: bool,
+    ) -> Result<LlmEndpointConfig, McpError> {
+        if !force {
+            if let Some(cfg) = provider.resolve_credentials() {
+                return Ok(cfg);
+            }
+        }
+
+        let (bin, args): (&str, &[&str]) = match provider.provider_id() {
+            "gemini" => (
+                if cfg!(windows) {
+                    "gcloud.cmd"
+                } else {
+                    "gcloud"
+                },
+                &["auth", "application-default", "login"],
+            ),
+            "openai" => (
+                if cfg!(windows) { "codex.cmd" } else { "codex" },
+                &["login"],
+            ),
+            "anthropic" => (
+                if cfg!(windows) {
+                    "claude.cmd"
+                } else {
+                    "claude"
+                },
+                &["auth", "login"],
+            ),
+            other => {
+                return Err(std::io::Error::other(format!(
+                    "no OAuth login hook registered for provider '{other}'"
+                ))
+                .into());
+            }
+        };
+
+        let status = Command::new(bin).args(args).status().map_err(|err| {
+            std::io::Error::other(format!(
+                "failed to launch '{bin} {}': {err}",
+                args.join(" ")
+            ))
+        })?;
+        if !status.success() {
+            return Err(std::io::Error::other(format!(
+                "OAuth login command '{bin} {}' exited with {status}",
+                args.join(" ")
+            ))
+            .into());
+        }
+
+        provider.resolve_credentials().ok_or_else(|| {
+            std::io::Error::other(format!(
+                "OAuth login completed for '{}', but no credentials were discovered afterward",
+                provider.provider_id()
+            ))
+            .into()
+        })
     }
 }

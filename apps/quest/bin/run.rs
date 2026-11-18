@@ -48,6 +48,8 @@ enum Commands {
     Mcp(McpArgs),
     /// Run the coded autonomous QuestForge XR DevOps agent over live MCP stdio
     Agent(AgentArgs),
+    /// Authenticate or inspect OAuth/API-key credentials for LLM providers (`gemini`, `openai`, `anthropic`)
+    Auth(AuthArgs),
     /// Manage Quest lab and device fleets (discover, deploy, rollback, telemetry, logcat, screenshot)
     Ops(OpsArgs),
     /// Run the QuestForge hosted control plane HTTP server
@@ -302,6 +304,9 @@ struct AgentArgs {
     /// LLM provider SPI (`gemini`, `openai`, `anthropic`; auto-detected when omitted)
     #[arg(long)]
     provider: Option<String>,
+    /// Run OAuth login hook for the selected provider when credentials are missing
+    #[arg(long)]
+    auth: bool,
     /// OpenAI-compatible chat completions URL (or QUESTFORGE_LLM_URL env var)
     #[arg(long)]
     llm_url: Option<String>,
@@ -320,6 +325,19 @@ struct AgentArgs {
     /// Emit machine-readable JSON output
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+struct AuthArgs {
+    /// Target LLM provider (`gemini`, `openai`, `anthropic`; defaults to `gemini`)
+    #[arg(long, default_value = "gemini")]
+    provider: String,
+    /// Force re-authentication even if cached OAuth credentials exist
+    #[arg(long)]
+    force: bool,
+    /// Print credential status for all built-in providers without launching login
+    #[arg(long)]
+    status: bool,
 }
 
 #[derive(Debug, Args)]
@@ -480,6 +498,7 @@ impl Runner {
             Commands::Verify(args) => run_verify(args),
             Commands::Mcp(args) => run_mcp(args),
             Commands::Agent(args) => run_agent(args),
+            Commands::Auth(args) => run_auth(args),
             Commands::Ops(args) => run_ops(args),
             Commands::Serve(args) => run_serve(args),
         }
@@ -862,9 +881,37 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         let resolved = if explicit_key.is_some() {
             None
         } else if let Some(p) = explicit_provider {
-            p.resolve_credentials().map(|cfg| (p, cfg))
+            match p.resolve_credentials() {
+                Some(cfg) => Some((p, cfg)),
+                None if args.auth => {
+                    match AutoLlmCredentialResolver::authenticate_provider(p, false) {
+                        Ok(cfg) => Some((p, cfg)),
+                        Err(err) => {
+                            eprintln!("quest agent --auth failed: {err}");
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                None => None,
+            }
         } else {
-            AutoLlmCredentialResolver::resolve_first_with_provider()
+            match AutoLlmCredentialResolver::resolve_first_with_provider() {
+                Some(found) => Some(found),
+                None if args.auth => {
+                    let Some(default_p) = AutoLlmCredentialResolver::provider_for_id("gemini")
+                    else {
+                        return ExitCode::FAILURE;
+                    };
+                    match AutoLlmCredentialResolver::authenticate_provider(default_p, false) {
+                        Ok(cfg) => Some((default_p, cfg)),
+                        Err(err) => {
+                            eprintln!("quest agent --auth failed: {err}");
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                None => None,
+            }
         };
 
         let api_key = explicit_key
@@ -990,6 +1037,44 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest agent failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_auth(args: AuthArgs) -> ExitCode {
+    if args.status {
+        for provider in AutoLlmCredentialResolver::built_in_providers() {
+            let id = provider.provider_id();
+            match provider.resolve_credentials() {
+                Some(cfg) => println!(
+                    "{id}: ready (source={}, model={}, url={})",
+                    cfg.auth_source, cfg.default_model, cfg.endpoint_url
+                ),
+                None => println!("{id}: missing (run `quest auth --provider {id}`)"),
+            }
+        }
+        return ExitCode::SUCCESS;
+    }
+
+    let Some(provider) = AutoLlmCredentialResolver::provider_for_id(&args.provider) else {
+        eprintln!(
+            "quest auth failed: unknown --provider '{}' (expected: gemini, openai, anthropic)",
+            args.provider
+        );
+        return ExitCode::FAILURE;
+    };
+
+    match AutoLlmCredentialResolver::authenticate_provider(provider, args.force) {
+        Ok(cfg) => {
+            println!(
+                "Authenticated provider '{}' (source={}, model={})",
+                cfg.provider_id, cfg.auth_source, cfg.default_model
+            );
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("quest auth failed: {err}");
             ExitCode::FAILURE
         }
     }
