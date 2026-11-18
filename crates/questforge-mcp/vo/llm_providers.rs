@@ -72,16 +72,15 @@ impl AutoLlmCredentialResolver {
     }
 }
 
+fn first_env_with_source(vars: &[&str]) -> Option<(String, String)> {
+    vars.iter()
+        .find_map(|name| non_empty_env(name).map(|val| (val, format!("env:{name}"))))
+}
+
 fn resolve_gemini() -> Option<LlmEndpointConfig> {
-    let (key, source) = if let Some(k) = discover_gemini_key_via_gcloud() {
-        (k, "gcloud-oauth".to_string())
-    } else if let Some(k) = non_empty_env("GEMINI_API_KEY") {
-        (k, "env:GEMINI_API_KEY".to_string())
-    } else if let Some(k) = non_empty_env("GOOGLE_API_KEY") {
-        (k, "env:GOOGLE_API_KEY".to_string())
-    } else {
-        return None;
-    };
+    let (key, source) = discover_gemini_key_via_gcloud()
+        .map(|k| (k, "gcloud-oauth".to_string()))
+        .or_else(|| first_env_with_source(&["GEMINI_API_KEY", "GOOGLE_API_KEY"]))?;
 
     Some(LlmEndpointConfig {
         provider_id: "gemini".to_string(),
@@ -94,13 +93,7 @@ fn resolve_gemini() -> Option<LlmEndpointConfig> {
 }
 
 fn resolve_openai() -> Option<LlmEndpointConfig> {
-    let (key, source) = if let Some(k) = non_empty_env("OPENAI_OAUTH_TOKEN") {
-        (k, "env:OPENAI_OAUTH_TOKEN".to_string())
-    } else if let Some(k) = non_empty_env("OPENAI_API_KEY") {
-        (k, "env:OPENAI_API_KEY".to_string())
-    } else {
-        return None;
-    };
+    let (key, source) = first_env_with_source(&["OPENAI_OAUTH_TOKEN", "OPENAI_API_KEY"])?;
 
     Some(LlmEndpointConfig {
         provider_id: "openai".to_string(),
@@ -112,13 +105,7 @@ fn resolve_openai() -> Option<LlmEndpointConfig> {
 }
 
 fn resolve_anthropic() -> Option<LlmEndpointConfig> {
-    let (key, source) = if let Some(k) = non_empty_env("ANTHROPIC_OAUTH_TOKEN") {
-        (k, "env:ANTHROPIC_OAUTH_TOKEN".to_string())
-    } else if let Some(k) = non_empty_env("ANTHROPIC_API_KEY") {
-        (k, "env:ANTHROPIC_API_KEY".to_string())
-    } else {
-        return None;
-    };
+    let (key, source) = first_env_with_source(&["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])?;
 
     Some(LlmEndpointConfig {
         provider_id: "anthropic".to_string(),

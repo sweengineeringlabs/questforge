@@ -22,6 +22,4 @@ mod traits;
 
 pub use self::builder::{BuilderError, QuestforgeBuilder};
 pub use self::error::CrateError;
-pub use self::traits::{
-    LlmCredentialProvider, LlmEndpointConfig, QuestforgeCapability, QuestforgeSvc,
-};
+pub use self::traits::{QuestforgeCapability, QuestforgeSvc};
