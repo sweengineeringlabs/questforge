@@ -107,6 +107,7 @@ impl ProjectScaffolder {
                     format!("m_EditorVersion: {engine_ver}\n"),
                 ));
                 files.push(("Packages/manifest.json", unity_packages_manifest()));
+                files.push(("Assets/Editor/QuestForgeBuild.cs", unity_build_script_cs()));
                 files.push(("src/.gitkeep", String::new()));
             }
             EngineKind::Unreal => {
@@ -240,6 +241,46 @@ fn unity_packages_manifest() -> String {
     "com.meta.xr.sdk.all": "68.0.0",
     "com.unity.xr.openxr": "1.10.0"
   }
+}
+"#
+    .to_string()
+}
+
+fn unity_build_script_cs() -> String {
+    r#"using System;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.Build.Reporting;
+
+namespace QuestForge
+{
+    public static class Build
+    {
+        public static void BuildQuestApk()
+        {
+            var args = Environment.GetCommandLineArgs();
+            var outPath = "Build/quest-app.apk";
+            for (var i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "-questOutputApk")
+                {
+                    outPath = args[i + 1];
+                    break;
+                }
+            }
+
+            EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
+            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+
+            var scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+            var report = BuildPipeline.BuildPlayer(scenes, outPath, BuildTarget.Android, BuildOptions.None);
+            if (report.summary.result != BuildResult.Succeeded)
+            {
+                throw new Exception($"QuestForge Android build failed: {report.summary.result}");
+            }
+        }
+    }
 }
 "#
     .to_string()

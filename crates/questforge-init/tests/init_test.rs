@@ -29,6 +29,7 @@ fn test_scaffold_unity_project_creates_valid_manifest_happy() {
     assert!(target.join("scripts/ci.sh").exists());
     assert!(target.join("ProjectSettings/ProjectVersion.txt").exists());
     assert!(target.join("Packages/manifest.json").exists());
+    assert!(target.join("Assets/Editor/QuestForgeBuild.cs").exists());
 
     let loaded = QuestforgeConfig::load_from_dir(&target);
     assert!(matches!(
