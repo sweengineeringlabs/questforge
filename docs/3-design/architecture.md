@@ -74,5 +74,5 @@ flowchart LR
 |---|---|---|
 | **Meta Horizon OS OpenXR** | Generated `XR_FB_*` / `XR_EXT_*` extensions + `AndroidManifest.xml` | 72/90/120 Hz, Passthrough, Hand Tracking, Foveation, Spatial Anchors |
 | **Meta Horizon Store** | `ovr-platform-util upload-quest-build` (`quest ci`) | Automated store channel promotion |
-| **Meta HMS / ManageXR / ArborXR** | HTTPS JSON push (`quest ops hms-push`) | Enterprise OTA kiosk distribution |
+| **Meta HMS / ManageXR / ArborXR** | HTTPS JSON push (`quest ops hms-push` via `mdm:` in `quest_forge.yaml`) | Enterprise OTA kiosk distribution (`graph.oculus.com`, `managexrapi.com`, `api.xrdm.app`) |
 | **PostgreSQL** | `PostgresStore` (`quest serve --database-url`) | Persistent projects, builds, reports, deployments, audit log |

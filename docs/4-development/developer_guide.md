@@ -32,12 +32,13 @@ quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-ver
 quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app --format html --out scorecard.html
 ```
 
-### 4. Showcase App (`examples/orbit-pulse-vr`)
+### 4. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)
 Inspect [examples/orbit-pulse-vr](file:///c:/phd-systems/swelabs/metaquest/examples/orbit-pulse-vr/quest_forge.yaml) for a working Native Rust OpenXR project:
 ```pwsh
 cargo test --manifest-path examples/orbit-pulse-vr/Cargo.toml
 quest check --project-dir examples/orbit-pulse-vr
 ```
+Optionally add `mdm:` (`meta-hms`, `managexr`, or `arborxr`) in `quest_forge.yaml` so `quest ops hms-push --project-dir my-quest-app --apk dist/app.apk` reads your provider, `app_id`, `channel`, and `device_group` automatically.
 
 ---
 

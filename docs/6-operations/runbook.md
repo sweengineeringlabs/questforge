@@ -97,10 +97,13 @@ On a lab host with Quest headsets or an Android emulator (`../mobile-emulator`) 
 quest ops agent --server http://127.0.0.1:8090 --group qa-lab
 ```
 
-Push a verified `100/100` APK to Meta HMS, ManageXR, or ArborXR:
+Push a verified `100/100` APK to Meta HMS (`graph.oculus.com`), ManageXR (`managexrapi.com`), or ArborXR (`api.xrdm.app`):
 ```pwsh
 $env:QUESTFORGE_MDM_TOKEN = "<mdm-bearer-token>"
-quest ops hms-push --provider meta-hms --app-id <app-id> --apk dist/orbit-pulse-vr-1.0.0.apk --channel PRODUCTION --group training-floor
+# Using explicit CLI flags:
+quest ops hms-push --provider meta-hms --app-id com.studio.app --apk dist/orbit-pulse-vr-1.0.0.apk --channel PRODUCTION --group training-floor
+# Or using `mdm:` settings from quest_forge.yaml:
+quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk
 ```
 
 ---
