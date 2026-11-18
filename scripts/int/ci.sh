@@ -31,6 +31,7 @@ swartch --vocabulary config/vocabulary.toml \
     crates/questforge-verify \
     crates/questforge-doctor \
     crates/questforge-init \
+    crates/questforge-mcp \
     apps/quest
 
 # 2. Formatting & Lint Gate

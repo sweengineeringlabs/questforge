@@ -8,6 +8,7 @@ members = [
     "crates/questforge-verify",
     "crates/questforge-doctor",
     "crates/questforge-init",
+    "crates/questforge-mcp",
     "apps/quest",
 ]
 
@@ -33,6 +34,7 @@ questforge-toolchain = { path = "crates/questforge-toolchain" }
 questforge-verify    = { path = "crates/questforge-verify" }
 questforge-doctor    = { path = "crates/questforge-doctor" }
 questforge-init      = { path = "crates/questforge-init" }
+questforge-mcp       = { path = "crates/questforge-mcp" }
 
 clap       = { version = "4.5", features = ["derive"] }
 hex        = "0.4"

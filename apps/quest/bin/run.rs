@@ -8,6 +8,7 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::EngineKind;
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
+use questforge_mcp::QuestMcpServer;
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
 
@@ -34,6 +35,8 @@ enum Commands {
     Ci(CiArgs),
     /// Verify APK release readiness, signatures, ABIs, and Meta VRC policy compliance
     Verify(VerifyArgs),
+    /// Run the QuestForge Model Context Protocol (MCP) server over stdio
+    Mcp(McpArgs),
 }
 
 #[derive(Debug, Args)]
@@ -212,6 +215,16 @@ struct VerifyArgs {
     out: Option<PathBuf>,
 }
 
+#[derive(Debug, Args)]
+struct McpArgs {
+    /// Workspace root used for documentation search
+    #[arg(long, default_value = ".")]
+    workspace_root: PathBuf,
+    /// Print available MCP tool definitions as JSON and exit
+    #[arg(long)]
+    list_tools: bool,
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -226,6 +239,7 @@ impl Runner {
             Commands::Init(args) => run_init(args),
             Commands::Ci(args) => run_ci(args),
             Commands::Verify(args) => run_verify(args),
+            Commands::Mcp(args) => run_mcp(args),
         }
     }
 }
@@ -480,6 +494,30 @@ fn run_verify(args: VerifyArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest verify failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_mcp(args: McpArgs) -> ExitCode {
+    if args.list_tools {
+        match serde_json::to_string_pretty(&QuestMcpServer::tool_definitions()) {
+            Ok(json) => {
+                println!("{json}");
+                return ExitCode::SUCCESS;
+            }
+            Err(err) => {
+                eprintln!("failed to serialize MCP tools: {err}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    let server = QuestMcpServer::new(args.workspace_root);
+    match server.serve_stdio() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("quest mcp failed: {err}");
             ExitCode::FAILURE
         }
     }
