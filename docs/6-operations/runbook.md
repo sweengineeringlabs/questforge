@@ -122,6 +122,18 @@ $env:QUEST_META_APP_SECRET = "<your-meta-app-secret>"
 quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
 ```
 
+### Linux via WSL Support
+Meta does not publish a native Linux `ovr-platform-util` binary. When running the Linux `quest` binary inside **WSL (Windows Subsystem for Linux)**:
+- **Auto-detection:** `quest` detects WSL automatically via `WSL_DISTRO_NAME`, `WSL_INTEROP`, or `/proc/version`.
+- **Toolchain setup:** `quest setup --ovr-version latest` installs native Linux `adb` and `cmdline-tools`, and provisions Meta's Windows `ovr-platform-util.exe` with executable permissions (`0755`) for WSL interop.
+- **Zero-config Horizon Store uploads:** `quest ops store` and the MCP `ovr_store` tool automatically check both `~/.questforge/` and the Windows host cache (`/mnt/c/Users/*/.questforge/`), and translate Linux `--apk` / `--dir` paths with `wslpath -w` before invoking `ovr-platform-util.exe`:
+```bash
+export QUEST_META_APP_SECRET="<your-meta-app-secret>"
+quest ops store --action version
+quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
+```
+- **USB Quest Headsets on WSL2:** Connect headsets over wireless ADB (`adb connect <ip>:5555`) or attach USB via `usbipd-win` (`usbipd attach --wsl --busid <busid>`).
+
 ---
 
 ## 6. Troubleshooting

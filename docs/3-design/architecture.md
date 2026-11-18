@@ -83,6 +83,7 @@ sequenceDiagram
 ```
 
 - **Auth & Fallback (`quest auth` / `--auth`):** OAuth-first (`gcloud` ADC/OAuth for Gemini, `~/.codex/auth.json` for OpenAI, `~/.claude/.credentials.json` for Anthropic), falling back to environment API keys (`GEMINI_API_KEY` / `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) or an interactive API-key prompt when OAuth fails.
+- **Linux via WSL Interop (`questforge-toolchain` & `questforge-ops`):** Because Meta does not ship a native Linux `ovr-platform-util`, QuestForge detects WSL (`PlatformTarget { os: "wsl", .. }`), provisions native Linux `adb`/`cmdline-tools` alongside Meta's Windows `ovr-platform-util.exe` (`chmod 0755`), reuses any existing Windows host cache under `/mnt/c/Users/*/.questforge/`, and transparently translates Linux paths via `wslpath -w` when invoking `ovr-platform-util.exe`.
 
 ## Layer Responsibilities
 

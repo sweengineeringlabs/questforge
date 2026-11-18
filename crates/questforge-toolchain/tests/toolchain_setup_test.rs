@@ -189,3 +189,72 @@ toolchain:
         Ok(ref specs) if specs[0].version == "35.0.2"
     ));
 }
+
+#[test]
+fn test_resolve_specs_wsl_uses_linux_android_tools_and_windows_ovr_exe_happy() {
+    let platform = PlatformTarget {
+        os: "wsl".to_string(),
+        arch: "x64".to_string(),
+    };
+    assert!(platform.is_wsl());
+    assert_eq!(
+        ToolKind::OvrPlatformUtil.binary_rel_path(&platform.os),
+        "ovr-platform-util.exe"
+    );
+    assert_eq!(
+        ToolKind::Adb.binary_rel_path(&platform.os),
+        "platform-tools/adb"
+    );
+
+    let specs = ToolchainProvisioner::resolve_specs(
+        &SetupOptions {
+            include_cmdline_tools: true,
+            ovr_version: Some("latest".to_string()),
+            ..SetupOptions::default()
+        },
+        &platform,
+    );
+    assert!(matches!(
+        specs,
+        Ok(ref list)
+            if list.len() == 3
+                && list[0].url.contains("-linux.zip")
+                && list[1].url.contains("linux-")
+                && list[2].tool == ToolKind::OvrPlatformUtil
+                && list[2].url.contains("oculus.com/download_app")
+                && list[2].sha256.is_some()
+    ));
+}
+
+#[test]
+fn test_provision_wsl_ovr_raw_exe_caches_under_wsl_platform_happy() {
+    let Ok(cache_dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let platform = PlatformTarget {
+        os: "wsl".to_string(),
+        arch: "x64".to_string(),
+    };
+    let exe_bytes = b"MZ-fake-ovr-platform-util-exe".to_vec();
+    let sha = hex::encode(Sha256::digest(&exe_bytes));
+    let specs = vec![ToolArtifactSpec {
+        tool: ToolKind::OvrPlatformUtil,
+        version: "211.0.0".to_string(),
+        url: "https://example.invalid/ovr-platform-util.exe".to_string(),
+        sha256: Some(sha),
+    }];
+
+    let res = ToolchainProvisioner::provision_with_fetcher(
+        platform,
+        cache_dir.path(),
+        &specs,
+        |_| Ok(exe_bytes.clone()),
+    );
+    assert!(matches!(
+        res,
+        Ok(ref report)
+            if report.tools.len() == 1
+                && report.tools[0].binary_path.ends_with("ovr-platform-util.exe")
+                && report.tools[0].binary_path.exists()
+    ));
+}

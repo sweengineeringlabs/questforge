@@ -799,6 +799,7 @@ impl FleetManager {
             }
         }
 
+        let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
         let mut artifact_sha256 = None;
         match req.action {
             OvrStoreAction::UploadQuestBuild => {
@@ -819,13 +820,16 @@ impl FleetManager {
                     .ok_or_else(|| store_err("missing target release channel"))?;
                 args.extend([
                     "--apk".to_string(),
-                    apk.display().to_string(),
+                    translate_path_for_ovr(&ovr_bin, apk),
                     "--channel".to_string(),
                     channel.to_string(),
                     "--disable-progress-bar".to_string(),
                 ]);
                 if let Some(dir) = &req.dir_path {
-                    args.extend(["--debug_symbols_dir".to_string(), dir.display().to_string()]);
+                    args.extend([
+                        "--debug_symbols_dir".to_string(),
+                        translate_path_for_ovr(&ovr_bin, dir),
+                    ]);
                 }
                 if let Some(notes) = req
                     .release_notes
@@ -850,7 +854,7 @@ impl FleetManager {
                     "--build_id".to_string(),
                     build_id.to_string(),
                     "--output_dir".to_string(),
-                    dir.display().to_string(),
+                    translate_path_for_ovr(&ovr_bin, dir),
                 ]);
             }
             OvrStoreAction::GetReleaseChannelData => {}
@@ -889,13 +893,12 @@ impl FleetManager {
                     "--build_id".to_string(),
                     build_id.to_string(),
                     "--output_dir".to_string(),
-                    dir.display().to_string(),
+                    translate_path_for_ovr(&ovr_bin, dir),
                 ]);
             }
             OvrStoreAction::Version => {}
         }
 
-        let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
         let out = env.run_bin(&ovr_bin, &args)?;
         let stdout_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !out.success {
@@ -921,6 +924,71 @@ impl FleetManager {
     }
 }
 
+fn is_wsl_runtime() -> bool {
+    if cfg!(windows) {
+        return false;
+    }
+    if std::env::var_os("WSL_DISTRO_NAME").is_some()
+        || std::env::var_os("WSL_INTEROP").is_some()
+    {
+        return true;
+    }
+    fs::read_to_string("/proc/version")
+        .map(|v| {
+            let lower = v.to_ascii_lowercase();
+            lower.contains("microsoft") || lower.contains("wsl")
+        })
+        .unwrap_or(false)
+}
+
+fn is_windows_exe(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+}
+
+fn translate_path_for_ovr(ovr_bin: &Path, path: &Path) -> String {
+    if !cfg!(windows) && is_wsl_runtime() && is_windows_exe(ovr_bin) {
+        if let Ok(output) = Command::new("wslpath").arg("-w").arg(path).output() {
+            if output.status.success() {
+                let win_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !win_path.is_empty() {
+                    return win_path;
+                }
+            }
+        }
+    }
+    path.display().to_string()
+}
+
+fn find_ovr_in_questforge_dir(home_path: &Path, exe_names: &[&str]) -> Option<PathBuf> {
+    for exe_name in exe_names {
+        let tools_bin = home_path
+            .join("tools")
+            .join("ovr-platform-util")
+            .join(exe_name);
+        if tools_bin.exists() {
+            return Some(tools_bin);
+        }
+    }
+    if let Ok(platforms) = fs::read_dir(home_path.join("cache")) {
+        for plat in platforms.flatten() {
+            let ovr_dir = plat.path().join("ovr-platform-util");
+            if let Ok(versions) = fs::read_dir(ovr_dir) {
+                for ver in versions.flatten() {
+                    for exe_name in exe_names {
+                        let candidate = ver.path().join(exe_name);
+                        if candidate.exists() {
+                            return Some(candidate);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn resolve_ovr_bin(explicit: Option<&Path>) -> PathBuf {
     if let Some(p) = explicit {
         return p.to_path_buf();
@@ -931,35 +999,32 @@ fn resolve_ovr_bin(explicit: Option<&Path>) -> PathBuf {
             return PathBuf::from(trimmed);
         }
     }
-    let exe_name = if cfg!(windows) {
-        "ovr-platform-util.exe"
+    let wsl = is_wsl_runtime();
+    let exe_names: &[&str] = if cfg!(windows) {
+        &["ovr-platform-util.exe"]
+    } else if wsl {
+        &["ovr-platform-util.exe", "ovr-platform-util"]
     } else {
-        "ovr-platform-util"
+        &["ovr-platform-util"]
     };
     if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
         let home_path = PathBuf::from(home).join(".questforge");
-        let tools_bin = home_path
-            .join("tools")
-            .join("ovr-platform-util")
-            .join(exe_name);
-        if tools_bin.exists() {
-            return tools_bin;
+        if let Some(found) = find_ovr_in_questforge_dir(&home_path, exe_names) {
+            return found;
         }
-        if let Ok(platforms) = fs::read_dir(home_path.join("cache")) {
-            for plat in platforms.flatten() {
-                let ovr_dir = plat.path().join("ovr-platform-util");
-                if let Ok(versions) = fs::read_dir(ovr_dir) {
-                    for ver in versions.flatten() {
-                        let candidate = ver.path().join(exe_name);
-                        if candidate.exists() {
-                            return candidate;
-                        }
-                    }
+    }
+    if wsl {
+        if let Ok(users) = fs::read_dir("/mnt/c/Users") {
+            for user_dir in users.flatten() {
+                let win_qf = user_dir.path().join(".questforge");
+                if let Some(found) = find_ovr_in_questforge_dir(&win_qf, &["ovr-platform-util.exe"])
+                {
+                    return found;
                 }
             }
         }
     }
-    PathBuf::from(exe_name)
+    PathBuf::from(exe_names[0])
 }
 
 fn run_adb_checked(env: &OpsEnv, args: &[String]) -> Result<AdbOutput, OpsError> {

@@ -26,7 +26,7 @@ Building for **Meta Quest** shouldn't mean wrestling with OpenXR permissions, br
 
 ## Quick Start
 
-1. **Install** the latest binary from [GitHub Releases](https://github.com/sweengineeringlabs/questforge/releases/latest).
+1. **Install** the latest binary (Windows, macOS, or Linux / WSL) from [GitHub Releases](https://github.com/sweengineeringlabs/questforge/releases/latest).
 2. **Follow the [Runbook & Playbook](docs/6-operations/runbook.md)** for full setup, or jump straight in:
 
 ```pwsh

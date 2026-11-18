@@ -25,6 +25,7 @@ quest check --project-dir my-quest-app
 quest setup --adb-version latest --allow-unverified
 quest doctor --fix --project-dir my-quest-app
 ```
+> **Linux via WSL:** On Windows Subsystem for Linux (WSL), `quest setup --ovr-version latest` automatically detects WSL, installs native Linux `adb`/`cmdline-tools` alongside Meta's Windows `ovr-platform-util.exe` (`0755`), and `quest ops store` / `ovr_store` transparently translate Linux file paths via `wslpath -w` (or reuse an existing Windows host install under `/mnt/c/Users/*/.questforge/`).
 
 ### 3. Build, SBOM & Store Verification
 ```pwsh

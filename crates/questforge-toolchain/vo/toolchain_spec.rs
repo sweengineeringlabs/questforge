@@ -17,17 +17,43 @@ const DEFAULT_CMDLINE_TOOLS_VERSION: &str = "11076708";
 /// Supported host operating system and architecture pair.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlatformTarget {
-    /// OS label (`windows`, `linux`, `macos`).
+    /// OS label (`windows`, `linux`, `wsl`, `macos`).
     pub os: String,
     /// Architecture label (`x64`, `arm64`).
     pub arch: String,
 }
 
 impl PlatformTarget {
+    /// Returns true when the current Linux host is running inside Windows Subsystem for Linux (WSL).
+    #[must_use]
+    pub fn is_wsl_host() -> bool {
+        if std::env::consts::OS != "linux" {
+            return false;
+        }
+        if std::env::var_os("WSL_DISTRO_NAME").is_some()
+            || std::env::var_os("WSL_INTEROP").is_some()
+        {
+            return true;
+        }
+        fs::read_to_string("/proc/version")
+            .map(|v| {
+                let lower = v.to_ascii_lowercase();
+                lower.contains("microsoft") || lower.contains("wsl")
+            })
+            .unwrap_or(false)
+    }
+
+    /// Returns true if this platform target represents Linux running under WSL.
+    #[must_use]
+    pub fn is_wsl(&self) -> bool {
+        self.os == "wsl"
+    }
+
     /// Detects the current host platform.
     pub fn current() -> Result<Self, ToolchainError> {
         let os = match std::env::consts::OS {
             "windows" => "windows",
+            "linux" if Self::is_wsl_host() => "wsl",
             "linux" => "linux",
             "macos" => "macos",
             other => {
@@ -97,7 +123,7 @@ impl ToolKind {
             (Self::Adb, _) => "platform-tools/adb",
             (Self::CmdlineTools, "windows") => "cmdline-tools/bin/sdkmanager.bat",
             (Self::CmdlineTools, _) => "cmdline-tools/bin/sdkmanager",
-            (Self::OvrPlatformUtil, "windows") => "ovr-platform-util.exe",
+            (Self::OvrPlatformUtil, "windows" | "wsl") => "ovr-platform-util.exe",
             (Self::OvrPlatformUtil, _) => "ovr-platform-util",
         }
     }
@@ -271,7 +297,7 @@ impl ToolchainProvisioner {
                 .ok_or_else(|| ToolchainError::MissingSpec {
                     tool: ToolKind::OvrPlatformUtil.dir_name().to_string(),
                     version: version.clone(),
-                    reason: "provide --ovr-url and --ovr-sha256 for ovr-platform-util".to_string(),
+                    reason: "Meta does not ship a native Linux ovr-platform-util; run on Windows/WSL or provide --ovr-url and --ovr-sha256".to_string(),
                 })?;
             let ovr_sha = opts
                 .ovr_sha256
@@ -382,6 +408,17 @@ impl ToolchainProvisioner {
                     path: binary_path.clone(),
                     source,
                 })?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let perms = fs::Permissions::from_mode(0o755);
+                    fs::set_permissions(&binary_path, perms).map_err(|source| {
+                        ToolchainError::Io {
+                            path: binary_path.clone(),
+                            source,
+                        }
+                    })?;
+                }
             } else {
                 extract_zip_atomic(&bytes, &install_dir)?;
             }
@@ -569,7 +606,7 @@ fn default_cmdline_tools_url(platform: &PlatformTarget, version: &str) -> String
 }
 
 fn default_ovr_url(platform: &PlatformTarget) -> Option<String> {
-    if platform.os == "windows" {
+    if matches!(platform.os.as_str(), "windows" | "wsl") {
         Some("https://www.oculus.com/download_app/?id=1076686279105243".to_string())
     } else {
         None
@@ -577,7 +614,7 @@ fn default_ovr_url(platform: &PlatformTarget) -> Option<String> {
 }
 
 fn default_ovr_sha256(platform: &PlatformTarget) -> Option<String> {
-    if platform.os == "windows" {
+    if matches!(platform.os.as_str(), "windows" | "wsl") {
         Some("97c3407c38955efb04c9d2e1860c58fea0b64be08860ff8a6591b2411b88b70a".to_string())
     } else {
         None
