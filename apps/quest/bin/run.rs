@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
+use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 
 #[derive(Debug, Parser)]
@@ -22,7 +23,7 @@ enum Commands {
     /// Install and verify Quest toolchain binaries (adb, cmdline-tools, ovr-platform-util)
     Setup(SetupArgs),
     /// Validate developer workstation or CI environment against quest_forge.yaml
-    Doctor,
+    Doctor(DoctorArgs),
     /// Scaffold a Quest-ready Unity or Unreal repository
     Init,
 }
@@ -55,6 +56,22 @@ struct SetupArgs {
     json: bool,
 }
 
+#[derive(Debug, Args)]
+struct DoctorArgs {
+    /// Directory containing quest_forge.yaml (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    project_dir: PathBuf,
+    /// CI mode (ignores missing USB headset; enforces signing and swartch gate)
+    #[arg(long)]
+    ci: bool,
+    /// Strict mode (treats signing warnings as failures)
+    #[arg(long)]
+    strict: bool,
+    /// Emit machine-readable JSON output
+    #[arg(long)]
+    json: bool,
+}
+
 /// Command-line runner for `quest`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Runner;
@@ -65,10 +82,7 @@ impl Runner {
         let cli = Cli::parse();
         match cli.command {
             Commands::Setup(args) => run_setup(args),
-            Commands::Doctor => {
-                println!("quest doctor: not yet implemented");
-                ExitCode::SUCCESS
-            }
+            Commands::Doctor(args) => run_doctor(args),
             Commands::Init => {
                 println!("quest init: not yet implemented");
                 ExitCode::SUCCESS
@@ -125,6 +139,49 @@ fn run_setup(args: SetupArgs) -> ExitCode {
         }
         Err(err) => {
             eprintln!("quest setup failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_doctor(args: DoctorArgs) -> ExitCode {
+    let opts = DoctorOptions {
+        project_dir: args.project_dir,
+        ci: args.ci,
+        strict: args.strict,
+    };
+
+    match DoctorRunner::run(&opts) {
+        Ok(report) => {
+            if args.json {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(err) => {
+                        eprintln!("failed to serialize doctor report: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                for check in &report.checks {
+                    let badge = match check.status {
+                        CheckStatus::Pass => "PASS",
+                        CheckStatus::Warn => "WARN",
+                        CheckStatus::Fail => "FAIL",
+                    };
+                    println!("[{badge}] {} ({}): {}", check.id, check.name, check.details);
+                    if let Some(fix) = &check.remediation {
+                        println!("       fix: {fix}");
+                    }
+                }
+            }
+            if report.has_failures() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(err) => {
+            eprintln!("quest doctor failed: {err}");
             ExitCode::FAILURE
         }
     }

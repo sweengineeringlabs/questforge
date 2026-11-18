@@ -1,14 +1,23 @@
-// Template generated: error/error_file
-//! [`CrateError`] -- Errors for `crate`.
+//! Error types for `questforge-doctor`.
 
 use thiserror::Error;
 
-/// Errors arising in internal operations.
+/// Fatal errors preventing `quest doctor` from executing diagnostics.
 #[derive(Debug, Error)]
-pub enum CrateError {
-    #[error("internal error: {message}")]
-    Internal {
-        /// What went wrong.
-        message: String,
-    },
+pub enum DoctorError {
+    /// Failed to load or validate `quest_forge.yaml`.
+    #[error("manifest error: {0}")]
+    Config(#[from] questforge_config::ConfigError),
+
+    /// Failed to serialize JSON report.
+    #[error("serialization error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+impl From<DoctorError> for questforge_api::CrateError {
+    fn from(err: DoctorError) -> Self {
+        Self::Internal {
+            message: err.to_string(),
+        }
+    }
 }

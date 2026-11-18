@@ -558,6 +558,10 @@ name = "questforge-doctor"
 version = "0.1.0"
 dependencies = [
  "questforge-api",
+ "questforge-config",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

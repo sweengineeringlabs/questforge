@@ -1,9 +1,12 @@
 //! Value objects module.
 //!
 //! ```compile_fail
-//! use questforge_doctor::vo::crate_data::CrateData;
+//! use questforge_doctor::vo::doctor_report::DoctorRunner;
 //! ```
 
-mod crate_data;
+mod doctor_report;
 
-pub use self::crate_data::CrateData;
+pub use self::doctor_report::{
+    CheckResult, CheckStatus, CmdOutput, DoctorEnv, DoctorOptions, DoctorReport, DoctorRunner,
+    MockDoctorEnv,
+};
