@@ -358,7 +358,7 @@ fn build_command_for(
                 cmd.push("aarch64-linux-android".to_string());
             }
             cmd.push("--manifest-path".to_string());
-            cmd.push(project_dir.join("Cargo.toml").display().to_string());
+            cmd.push("Cargo.toml".to_string());
             cmd
         }
     }

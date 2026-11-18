@@ -8,7 +8,7 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
-use questforge_mcp::QuestMcpServer;
+use questforge_mcp::{AgentGoal, AgentOptions, QuestMcpServer, QuestXrAgent};
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
@@ -43,6 +43,8 @@ enum Commands {
     Verify(VerifyArgs),
     /// Run the QuestForge Model Context Protocol (MCP) server over stdio
     Mcp(McpArgs),
+    /// Run the coded autonomous QuestForge XR DevOps agent over live MCP stdio
+    Agent(AgentArgs),
     /// Manage Quest lab and device fleets (discover, deploy, rollback, telemetry, logcat, screenshot)
     Ops(OpsArgs),
     /// Run the QuestForge hosted control plane HTTP server
@@ -260,6 +262,45 @@ struct McpArgs {
     list_tools: bool,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliAgentGoal {
+    Check,
+    Release,
+    FleetRelease,
+}
+
+impl From<CliAgentGoal> for AgentGoal {
+    fn from(value: CliAgentGoal) -> Self {
+        match value {
+            CliAgentGoal::Check => Self::Check,
+            CliAgentGoal::Release => Self::Release,
+            CliAgentGoal::FleetRelease => Self::FleetRelease,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+struct AgentArgs {
+    /// Target QuestForge project directory
+    #[arg(long, default_value = ".")]
+    project_dir: PathBuf,
+    /// Output directory for APK, metadata, and SBOM
+    #[arg(long, default_value = "dist")]
+    output_dir: PathBuf,
+    /// Release version string
+    #[arg(long, default_value = "1.0.0")]
+    release_version: String,
+    /// Autonomous goal to execute
+    #[arg(long, value_enum, default_value_t = CliAgentGoal::Release)]
+    goal: CliAgentGoal,
+    /// Plan build without invoking engine compiler
+    #[arg(long)]
+    dry_run: bool,
+    /// Emit machine-readable JSON output
+    #[arg(long)]
+    json: bool,
+}
+
 #[derive(Debug, Args)]
 struct OpsArgs {
     /// Fleet inventory registry JSON path
@@ -417,6 +458,7 @@ impl Runner {
             Commands::Ci(args) => run_ci(args),
             Commands::Verify(args) => run_verify(args),
             Commands::Mcp(args) => run_mcp(args),
+            Commands::Agent(args) => run_agent(args),
             Commands::Ops(args) => run_ops(args),
             Commands::Serve(args) => run_serve(args),
         }
@@ -769,6 +811,57 @@ fn run_mcp(args: McpArgs) -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("quest mcp failed: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_agent(args: AgentArgs) -> ExitCode {
+    let Ok(quest_bin) = std::env::current_exe() else {
+        eprintln!("quest agent failed: unable to locate current quest executable");
+        return ExitCode::FAILURE;
+    };
+    let opts = AgentOptions {
+        project_dir: args.project_dir,
+        output_dir: args.output_dir,
+        release_version: args.release_version,
+        goal: args.goal.into(),
+        dry_run: args.dry_run,
+    };
+
+    match QuestXrAgent::run_stdio_client(&quest_bin, &opts) {
+        Ok(report) => {
+            if args.json {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => println!("{json}"),
+                    Err(err) => {
+                        eprintln!("failed to serialize agent report: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                println!(
+                    "QuestXrAgent finished (goal={:?}, passed={}, tools={}):",
+                    report.goal,
+                    report.passed,
+                    report.discovered_tools.len()
+                );
+                for s in &report.steps {
+                    let badge = if s.ok { "OK" } else { "ERR" };
+                    println!("  {}. [{}] {} -> {}", s.step, badge, s.tool, s.summary);
+                }
+                if let Some(score) = report.verify_score {
+                    println!("  Final VRC score: {score}/100");
+                }
+            }
+            if report.passed {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        Err(err) => {
+            eprintln!("quest agent failed: {err}");
             ExitCode::FAILURE
         }
     }

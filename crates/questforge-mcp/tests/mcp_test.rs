@@ -1,6 +1,10 @@
 //! Integration tests for `questforge-mcp`.
 
-use questforge_mcp::{JsonRpcRequest, QuestMcpServer};
+use std::fs;
+
+use questforge_config::EngineKind;
+use questforge_init::{InitOptions, ProjectScaffolder};
+use questforge_mcp::{AgentGoal, AgentOptions, JsonRpcRequest, QuestMcpServer, QuestXrAgent};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -109,4 +113,42 @@ fn test_mcp_unknown_method_and_invalid_tool_error() {
         server.handle_request(&bad_tool),
         Some(ref r) if r.error.as_ref().is_some_and(|e| e.code == -32602)
     ));
+}
+
+#[test]
+fn test_xr_agent_in_process_heals_drift_and_completes_release_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let proj = dir.path().join("agent-quest");
+    assert!(ProjectScaffolder::scaffold(&InitOptions {
+        target_dir: proj.clone(),
+        name: "agent-quest".to_string(),
+        package_id: "com.acme.agentquest".to_string(),
+        engine: EngineKind::Rust,
+        engine_version: None,
+        template_url: None,
+        force: false,
+    })
+    .is_ok());
+
+    // Simulate config drift by deleting generated bootstrap so the agent must self-heal.
+    assert!(fs::remove_file(proj.join("src/questforge_bootstrap_gen.rs")).is_ok());
+
+    let report = QuestXrAgent::run_in_process(&AgentOptions {
+        project_dir: proj.clone(),
+        output_dir: proj.join("dist"),
+        release_version: "1.0.0".to_string(),
+        goal: AgentGoal::Release,
+        dry_run: true,
+    });
+    assert!(matches!(
+        report,
+        Ok(ref r)
+            if r.passed
+                && r.discovered_tools.len() == 11
+                && r.steps.iter().any(|s| s.tool == "sync_project" && s.ok)
+                && r.steps.iter().any(|s| s.tool == "build_project" && s.ok)
+    ));
+    assert!(proj.join("src/questforge_bootstrap_gen.rs").exists());
 }
