@@ -373,7 +373,18 @@ impl ToolchainProvisioner {
                 verify_sha256(spec.tool, &spec.version, expected, &bytes)?;
             }
 
-            extract_zip_atomic(&bytes, &install_dir)?;
+            if spec.tool == ToolKind::OvrPlatformUtil && !bytes.starts_with(b"PK") {
+                fs::create_dir_all(&install_dir).map_err(|source| ToolchainError::Io {
+                    path: install_dir.clone(),
+                    source,
+                })?;
+                fs::write(&binary_path, &bytes).map_err(|source| ToolchainError::Io {
+                    path: binary_path.clone(),
+                    source,
+                })?;
+            } else {
+                extract_zip_atomic(&bytes, &install_dir)?;
+            }
             installed.push(InstalledTool {
                 tool: spec.tool,
                 version: spec.version.clone(),

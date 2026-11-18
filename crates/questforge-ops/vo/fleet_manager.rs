@@ -937,13 +937,26 @@ fn resolve_ovr_bin(explicit: Option<&Path>) -> PathBuf {
         "ovr-platform-util"
     };
     if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
-        let cached = PathBuf::from(home)
-            .join(".questforge")
+        let home_path = PathBuf::from(home).join(".questforge");
+        let tools_bin = home_path
             .join("tools")
             .join("ovr-platform-util")
             .join(exe_name);
-        if cached.exists() {
-            return cached;
+        if tools_bin.exists() {
+            return tools_bin;
+        }
+        if let Ok(platforms) = fs::read_dir(home_path.join("cache")) {
+            for plat in platforms.flatten() {
+                let ovr_dir = plat.path().join("ovr-platform-util");
+                if let Ok(versions) = fs::read_dir(ovr_dir) {
+                    for ver in versions.flatten() {
+                        let candidate = ver.path().join(exe_name);
+                        if candidate.exists() {
+                            return candidate;
+                        }
+                    }
+                }
+            }
         }
     }
     PathBuf::from(exe_name)

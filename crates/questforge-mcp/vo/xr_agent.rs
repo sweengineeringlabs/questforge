@@ -98,6 +98,7 @@ impl AgentAudience {
                 "search_docs",
             ],
             Self::Qa => &[
+                "setup_toolchain",
                 "verify_release",
                 "fleet_discover",
                 "publish_mdm",
