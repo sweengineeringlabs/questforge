@@ -120,3 +120,19 @@ fn test_server_jwt_auth_enforces_signed_tokens_edge() {
     });
     assert_eq!(bad_resp.status, 401);
 }
+
+#[test]
+fn test_server_serves_static_css_and_blocks_traversal_happy() {
+    let Ok(dir) = tempfile::TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    assert!(std::fs::write(dir.path().join("app.css"), "body { color: #fff; }").is_ok());
+
+    let server = ControlPlaneServer::new(Some(dir.path().to_path_buf()));
+    let css = server.handle_request(&make_req("GET", "/app.css", None, ""));
+    assert_eq!(css.status, 200);
+    assert_eq!(css.content_type, "text/css; charset=utf-8");
+
+    let traversal = server.handle_request(&make_req("GET", "/../secret.txt", None, ""));
+    assert_eq!(traversal.status, 404);
+}

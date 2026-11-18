@@ -431,6 +431,7 @@ impl ControlPlaneServer {
                 let id = path.trim_start_matches("/api/deployments/");
                 self.get_deployment(id)
             }
+            ("GET", path) => self.serve_static_asset(path),
             _ => json_response(404, &json!({ "error": "not found" })),
         }
     }
@@ -468,6 +469,34 @@ impl ControlPlaneServer {
             status: 200,
             content_type: "text/html; charset=utf-8",
             body: FALLBACK_DASHBOARD_HTML.as_bytes().to_vec(),
+        }
+    }
+
+    fn serve_static_asset(&self, req_path: &str) -> HttpResponse {
+        let Some(root) = &self.web_root else {
+            return json_response(404, &json!({ "error": "not found" }));
+        };
+        let rel = req_path.trim_start_matches('/');
+        if rel.is_empty() || rel.contains("..") || rel.contains('\\') {
+            return json_response(404, &json!({ "error": "not found" }));
+        }
+        let candidate = root.join(rel);
+        let Ok(bytes) = std::fs::read(&candidate) else {
+            return json_response(404, &json!({ "error": "not found" }));
+        };
+        let content_type = match candidate.extension().and_then(|e| e.to_str()) {
+            Some("css") => "text/css; charset=utf-8",
+            Some("js" | "mjs") => "application/javascript; charset=utf-8",
+            Some("html") => "text/html; charset=utf-8",
+            Some("json") => "application/json",
+            Some("svg") => "image/svg+xml",
+            Some("png") => "image/png",
+            _ => "application/octet-stream",
+        };
+        HttpResponse {
+            status: 200,
+            content_type,
+            body: bytes,
         }
     }
 

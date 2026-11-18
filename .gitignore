@@ -21,5 +21,6 @@ Thumbs.db
 .work/
 *.log
 
-# Frontend dependencies
+# Frontend dependencies & build
 node_modules/
+web/dist/
