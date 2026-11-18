@@ -26,6 +26,89 @@ pub enum AgentGoal {
     FleetRelease,
 }
 
+/// Target audience profile for [`QuestXrAgent`] workflows (`docs/0-ideation/concept.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentAudience {
+    /// XR Game Studios (Unity & Unreal Teams): scaffolding, SDK doctor, VRC & release builds.
+    Studio,
+    /// Enterprise XR Training & Simulation Teams: supply-chain SBOM, auditability & lab rollout.
+    Enterprise,
+    /// Platform & DevOps Engineers: CI pipelines, `quest_forge.yaml` sync & build diagnostics.
+    Platform,
+    /// XR QA & Release Managers: VRC scorecards, fleet discovery, deploy, logcat & screenshots.
+    Qa,
+    /// AI-Native XR Developers: full MCP toolset for local coding & debugging.
+    #[default]
+    Developer,
+}
+
+impl AgentAudience {
+    /// Default deterministic [`AgentGoal`] for this audience.
+    #[must_use]
+    pub const fn default_goal(self) -> AgentGoal {
+        match self {
+            Self::Studio => AgentGoal::Release,
+            Self::Enterprise | Self::Qa => AgentGoal::FleetRelease,
+            Self::Platform | Self::Developer => AgentGoal::Check,
+        }
+    }
+
+    /// Tailored system prompt for this audience's workflow.
+    #[must_use]
+    pub const fn system_prompt(self) -> &'static str {
+        match self {
+            Self::Studio => "You are the QuestForge XR Studio Agent for Unity/Unreal game teams. Use MCP tools (`init_project`, `setup_toolchain`, `doctor_check`, `check_source`, `sync_project`, `build_project`, `verify_release`) to keep projects VRC-ready and shippable.",
+            Self::Enterprise => "You are the QuestForge Enterprise XR Agent for regulated training and simulation teams. Prioritize supply-chain verification, SBOM/release auditability, and controlled MDM/lab rollout (`verify_release`, `fleet_discover`, `publish_mdm`) using MCP tools.",
+            Self::Platform => "You are the QuestForge Platform & DevOps Agent. Focus on environment parity (`setup_toolchain`, `doctor_check`), CI pipeline generation (`generate_pipeline`), static drift (`check_source`, `sync_project`), and build diagnostics (`analyze_build_failure`).",
+            Self::Qa => "You are the QuestForge QA & Release Manager Agent. Focus on release readiness (`verify_release`, `check_source`), lab headset discovery (`fleet_discover`), and release distribution (`publish_mdm`).",
+            Self::Developer => "You are the QuestForge XR Developer Agent. Use the provided MCP tools to inspect, sync, diagnose, build, verify, or deploy Quest projects.",
+        }
+    }
+
+    /// Preferred MCP tool names prioritized for this audience (`Developer` includes all tools).
+    #[must_use]
+    pub const fn preferred_tools(self) -> &'static [&'static str] {
+        match self {
+            Self::Studio => &[
+                "init_project",
+                "setup_toolchain",
+                "doctor_check",
+                "check_source",
+                "sync_project",
+                "build_project",
+                "verify_release",
+            ],
+            Self::Enterprise => &[
+                "doctor_check",
+                "check_source",
+                "build_project",
+                "verify_release",
+                "fleet_discover",
+                "publish_mdm",
+                "search_docs",
+            ],
+            Self::Platform => &[
+                "setup_toolchain",
+                "doctor_check",
+                "check_source",
+                "sync_project",
+                "generate_pipeline",
+                "analyze_build_failure",
+                "search_docs",
+            ],
+            Self::Qa => &[
+                "verify_release",
+                "fleet_discover",
+                "publish_mdm",
+                "check_source",
+                "search_docs",
+            ],
+            Self::Developer => &[],
+        }
+    }
+}
+
 /// Recorded step from an autonomous agent execution.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentStepLog {
@@ -171,6 +254,27 @@ impl QuestXrAgent {
         provider: &dyn LlmProviderSpi,
         config: &LlmEndpointConfig,
     ) -> Result<LlmRunReport, McpError> {
+        Self::run_llm_stdio_client_with_spi_and_audience(
+            quest_bin,
+            project_dir,
+            prompt,
+            max_turns,
+            provider,
+            config,
+            AgentAudience::Developer,
+        )
+    }
+
+    /// Spawns `<quest_bin> mcp --workspace-root <project_dir>` and runs an audience-tailored LLM ReAct loop.
+    pub fn run_llm_stdio_client_with_spi_and_audience(
+        quest_bin: &Path,
+        project_dir: &Path,
+        prompt: &str,
+        max_turns: usize,
+        provider: &dyn LlmProviderSpi,
+        config: &LlmEndpointConfig,
+        audience: AgentAudience,
+    ) -> Result<LlmRunReport, McpError> {
         let mut child = Command::new(quest_bin)
             .args(["mcp", "--workspace-root"])
             .arg(project_dir)
@@ -186,6 +290,7 @@ impl QuestXrAgent {
             max_turns,
             provider,
             config,
+            audience,
             |http_req| {
                 let mut req = ureq::post(&http_req.url);
                 for (header, val) in &http_req.headers {
@@ -227,6 +332,19 @@ impl QuestXrAgent {
     pub fn run_llm_in_process_with_provider<F>(
         opts: &LlmAgentOptions,
         provider: &dyn LlmProviderSpi,
+        completer: F,
+    ) -> Result<LlmRunReport, McpError>
+    where
+        F: FnMut(&Value) -> Result<Value, McpError>,
+    {
+        Self::run_llm_in_process_with_audience(opts, provider, AgentAudience::Developer, completer)
+    }
+
+    /// Runs the LLM ReAct loop in-process with an explicit [`LlmProviderSpi`], [`AgentAudience`], and callback.
+    pub fn run_llm_in_process_with_audience<F>(
+        opts: &LlmAgentOptions,
+        provider: &dyn LlmProviderSpi,
+        audience: AgentAudience,
         mut completer: F,
     ) -> Result<LlmRunReport, McpError>
     where
@@ -247,6 +365,7 @@ impl QuestXrAgent {
             opts.max_turns,
             provider,
             &config,
+            audience,
             |http_req| completer(&http_req.body),
         )
     }
@@ -257,6 +376,7 @@ impl QuestXrAgent {
         max_turns: usize,
         provider: &dyn LlmProviderSpi,
         config: &LlmEndpointConfig,
+        audience: AgentAudience,
         mut completer: F,
     ) -> Result<LlmRunReport, McpError>
     where
@@ -270,27 +390,30 @@ impl QuestXrAgent {
             .cloned()
             .unwrap_or_default();
 
+        let preferred = audience.preferred_tools();
         let mut discovered_tools = Vec::with_capacity(raw_tools.len());
         let mut tool_schemas = Vec::with_capacity(raw_tools.len());
         for t in &raw_tools {
             if let Some(name) = t.get("name").and_then(|v| v.as_str()) {
                 discovered_tools.push(name.to_string());
-                tool_schemas.push(LlmToolSchema {
-                    name: name.to_string(),
-                    description: t
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    input_schema: t
-                        .get("inputSchema")
-                        .cloned()
-                        .unwrap_or_else(|| json!({"type":"object"})),
-                });
+                if preferred.is_empty() || preferred.contains(&name) {
+                    tool_schemas.push(LlmToolSchema {
+                        name: name.to_string(),
+                        description: t
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        input_schema: t
+                            .get("inputSchema")
+                            .cloned()
+                            .unwrap_or_else(|| json!({"type":"object"})),
+                    });
+                }
             }
         }
 
-        let system_prompt = "You are the QuestForge XR DevOps agent. Always use the provided MCP tools to inspect, sync, build, verify, or deploy Quest projects.";
+        let system_prompt = audience.system_prompt();
         let mut messages = vec![LlmChatMessage::User(prompt.to_string())];
         let mut steps = Vec::new();
         let max_turns = max_turns.max(1);

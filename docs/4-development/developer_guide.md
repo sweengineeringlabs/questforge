@@ -40,6 +40,18 @@ quest check --project-dir examples/orbit-pulse-vr
 ```
 Optionally add `mdm:` (`meta-hms`, `managexr`, or `arborxr`) in `quest_forge.yaml` so `quest ops hms-push --project-dir my-quest-app --apk dist/app.apk` reads your provider, `app_id`, `channel`, and `device_group` automatically.
 
+### 5. AI Agents & Provider Auth (`quest auth` & `quest agent`)
+Authenticate or inspect OAuth/API-key status across `gemini`, `openai`, and `anthropic`:
+```pwsh
+quest auth --status
+quest auth --provider gemini
+```
+Run an audience-tailored XR DevOps agent (`studio`, `enterprise`, `platform`, `qa`, `developer`):
+```pwsh
+quest agent --audience qa --provider gemini --auth --prompt "Verify release readiness and discover connected headsets"
+```
+If OAuth is unavailable or rejected (`401`/`403`), `quest auth` and `quest agent --auth` fall back to environment API keys or an interactive API-key prompt.
+
 ---
 
 ## Part 2: QuestForge Contributors

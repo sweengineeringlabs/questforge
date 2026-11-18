@@ -30,7 +30,7 @@ flowchart TD
         Init["questforge-init (quest init, sync, check)"]
         CI["questforge-ci (Build, Rust APK, CycloneDX SBOM)"]
         Verify["questforge-verify (QV-001..QV-006 Scorecards)"]
-        MCP["questforge-mcp (9 JSON-RPC 2.0 Tools)"]
+        MCP["questforge-mcp (12 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
         Ops["questforge-ops (ADB Fleet + Agent + HMS/MDM Push)"]
         Server["questforge-server (REST API, JWT RBAC, PostgreSQL)"]
     end
@@ -61,26 +61,28 @@ flowchart LR
 
 ## AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)
 
-Every autonomous and LLM-driven agent interaction routes strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`):
+Every autonomous and LLM-driven agent interaction routes strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`), with provider credentials and wire formats abstracted behind `LlmProviderSpi` (`GeminiProvider`, `OpenAiProvider`, `AnthropicProvider`) and tailored via `--audience` (`studio`, `enterprise`, `platform`, `qa`, `developer`):
 
 ```mermaid
 sequenceDiagram
     actor User
     participant Agent as quest agent (LLM ReAct Client)
     participant MCP as quest mcp (JSON-RPC 2.0 Server)
-    participant LLM as LLM API (OpenAI / Gemini / Ollama)
+    participant LLM as LlmProviderSpi (Gemini / OpenAI / Anthropic)
 
-    User->>Agent: quest agent --prompt "Check, fix, build, and verify orbit-pulse-vr"
+    User->>Agent: quest agent --audience studio --provider gemini --auth --prompt "Check, fix, build, and verify orbit-pulse-vr"
     Agent->>MCP: tools/list (JSON-RPC 2.0)
-    MCP-->>Agent: 11 QuestForge MCP tool schemas
+    MCP-->>Agent: 12 QuestForge MCP tool schemas (filtered by audience)
     loop Until LLM returns final answer
-        Agent->>LLM: Chat completions (prompt + 11 MCP tool definitions + history)
-        LLM-->>Agent: tool_calls (e.g. check_source, sync_project, build_project, verify_release)
+        Agent->>LLM: Provider-native request (OpenAI/Gemini Chat Completions or Anthropic /v1/messages)
+        LLM-->>Agent: tool_calls / tool_use (e.g. check_source, sync_project, build_project, verify_release)
         Agent->>MCP: tools/call (JSON-RPC 2.0)
         MCP-->>Agent: Structured tool result (JSON)
     end
     Agent-->>User: Final summary + verified 100/100 result
 ```
+
+- **Auth & Fallback (`quest auth` / `--auth`):** OAuth-first (`gcloud` ADC/OAuth for Gemini, `~/.codex/auth.json` for OpenAI, `~/.claude/.credentials.json` for Anthropic), falling back to environment API keys (`GEMINI_API_KEY` / `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) or an interactive API-key prompt when OAuth fails.
 
 ## Layer Responsibilities
 

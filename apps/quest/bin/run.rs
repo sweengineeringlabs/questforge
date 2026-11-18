@@ -1,5 +1,6 @@
 //! CLI execution coordination for `quest`.
 
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -9,8 +10,8 @@ use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmEndpointConfig, QuestMcpServer,
-    QuestXrAgent,
+    AgentAudience, AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmEndpointConfig,
+    QuestMcpServer, QuestXrAgent,
 };
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
@@ -284,6 +285,28 @@ impl From<CliAgentGoal> for AgentGoal {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum CliAgentAudience {
+    Studio,
+    Enterprise,
+    Platform,
+    Qa,
+    #[default]
+    Developer,
+}
+
+impl From<CliAgentAudience> for AgentAudience {
+    fn from(value: CliAgentAudience) -> Self {
+        match value {
+            CliAgentAudience::Studio => Self::Studio,
+            CliAgentAudience::Enterprise => Self::Enterprise,
+            CliAgentAudience::Platform => Self::Platform,
+            CliAgentAudience::Qa => Self::Qa,
+            CliAgentAudience::Developer => Self::Developer,
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 struct AgentArgs {
     /// Target QuestForge project directory
@@ -295,9 +318,12 @@ struct AgentArgs {
     /// Release version string
     #[arg(long, default_value = "1.0.0")]
     release_version: String,
-    /// Autonomous goal to execute (used when --prompt is not set)
-    #[arg(long, value_enum, default_value_t = CliAgentGoal::Release)]
-    goal: CliAgentGoal,
+    /// Autonomous goal to execute (defaults to audience default or `release`)
+    #[arg(long, value_enum)]
+    goal: Option<CliAgentGoal>,
+    /// Target audience profile (`studio`, `enterprise`, `platform`, `qa`, `developer`)
+    #[arg(long, value_enum, default_value_t = CliAgentAudience::Developer)]
+    audience: CliAgentAudience,
     /// Optional natural-language prompt to run in LLM ReAct mode via `quest mcp`
     #[arg(long)]
     prompt: Option<String>,
@@ -878,6 +904,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             None
         };
 
+        let audience: AgentAudience = args.audience.into();
         let resolved = if explicit_key.is_some() {
             None
         } else if let Some(p) = explicit_provider {
@@ -887,8 +914,18 @@ fn run_agent(args: AgentArgs) -> ExitCode {
                     match AutoLlmCredentialResolver::authenticate_provider(p, false) {
                         Ok(cfg) => Some((p, cfg)),
                         Err(err) => {
-                            eprintln!("quest agent --auth failed: {err}");
-                            return ExitCode::FAILURE;
+                            eprintln!(
+                                "OAuth login failed ({err}); falling back to API key prompt."
+                            );
+                            prompt_for_provider_api_key(p.provider_id()).map(|key| {
+                                (
+                                    p,
+                                    AutoLlmCredentialResolver::config_with_api_key(
+                                        p.provider_id(),
+                                        key,
+                                    ),
+                                )
+                            })
                         }
                     }
                 }
@@ -905,8 +942,18 @@ fn run_agent(args: AgentArgs) -> ExitCode {
                     match AutoLlmCredentialResolver::authenticate_provider(default_p, false) {
                         Ok(cfg) => Some((default_p, cfg)),
                         Err(err) => {
-                            eprintln!("quest agent --auth failed: {err}");
-                            return ExitCode::FAILURE;
+                            eprintln!(
+                                "OAuth login failed ({err}); falling back to API key prompt."
+                            );
+                            prompt_for_provider_api_key(default_p.provider_id()).map(|key| {
+                                (
+                                    default_p,
+                                    AutoLlmCredentialResolver::config_with_api_key(
+                                        default_p.provider_id(),
+                                        key,
+                                    ),
+                                )
+                            })
                         }
                     }
                 }
@@ -960,14 +1007,39 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             api_key,
             auth_source,
         };
-        return match QuestXrAgent::run_llm_stdio_client_with_spi(
+        let mut llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_audience(
             &quest_bin,
             &args.project_dir,
             &prompt,
             args.max_turns,
             provider,
             &endpoint_cfg,
-        ) {
+            audience,
+        );
+        if let Err(ref err) = llm_res {
+            if args.auth && AutoLlmCredentialResolver::is_auth_error(err) {
+                eprintln!(
+                    "OAuth authentication failed for '{}' ({err}); falling back to API key prompt.",
+                    provider.provider_id()
+                );
+                if let Some(key) = prompt_for_provider_api_key(provider.provider_id()) {
+                    let mut fallback_cfg =
+                        AutoLlmCredentialResolver::config_with_api_key(provider.provider_id(), key);
+                    fallback_cfg.endpoint_url = endpoint_cfg.endpoint_url.clone();
+                    fallback_cfg.default_model = endpoint_cfg.default_model.clone();
+                    llm_res = QuestXrAgent::run_llm_stdio_client_with_spi_and_audience(
+                        &quest_bin,
+                        &args.project_dir,
+                        &prompt,
+                        args.max_turns,
+                        provider,
+                        &fallback_cfg,
+                        audience,
+                    );
+                }
+            }
+        }
+        return match llm_res {
             Ok(report) => {
                 if args.json {
                     println!(
@@ -996,11 +1068,16 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         };
     }
 
+    let audience: AgentAudience = args.audience.into();
+    let goal = args
+        .goal
+        .map(Into::into)
+        .unwrap_or_else(|| audience.default_goal());
     let opts = AgentOptions {
         project_dir: args.project_dir,
         output_dir: args.output_dir,
         release_version: args.release_version,
-        goal: args.goal.into(),
+        goal,
         dry_run: args.dry_run,
     };
 
@@ -1074,9 +1151,40 @@ fn run_auth(args: AuthArgs) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(err) => {
-            eprintln!("quest auth failed: {err}");
-            ExitCode::FAILURE
+            eprintln!("OAuth login failed for '{}': {err}", provider.provider_id());
+            if let Some(key) = prompt_for_provider_api_key(provider.provider_id()) {
+                let cfg =
+                    AutoLlmCredentialResolver::config_with_api_key(provider.provider_id(), key);
+                println!(
+                    "Configured provider '{}' via prompted API key (source={}, model={}; set {} to persist)",
+                    cfg.provider_id,
+                    cfg.auth_source,
+                    cfg.default_model,
+                    AutoLlmCredentialResolver::provider_api_key_env(provider.provider_id())
+                );
+                ExitCode::SUCCESS
+            } else {
+                eprintln!("quest auth failed: {err}");
+                ExitCode::FAILURE
+            }
         }
+    }
+}
+
+fn prompt_for_provider_api_key(provider_id: &str) -> Option<String> {
+    if !io::stdin().is_terminal() {
+        return None;
+    }
+    let env_name = AutoLlmCredentialResolver::provider_api_key_env(provider_id);
+    eprint!("Enter {provider_id} API key ({env_name}, leave blank to cancel): ");
+    let _ = io::stderr().flush();
+    let mut line = String::new();
+    io::stdin().read_line(&mut line).ok()?;
+    let trimmed = line.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
     }
 }
 

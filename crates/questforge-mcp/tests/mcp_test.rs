@@ -5,10 +5,10 @@ use std::fs;
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, AnthropicProvider, AutoLlmCredentialResolver, GeminiProvider,
-    JsonRpcRequest, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig, LlmHttpRequest,
-    LlmProviderSpi, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError, OpenAiProvider,
-    QuestMcpServer, QuestXrAgent,
+    AgentAudience, AgentGoal, AgentOptions, AnthropicProvider, AutoLlmCredentialResolver,
+    GeminiProvider, JsonRpcRequest, LlmAgentOptions, LlmChatMessage, LlmEndpointConfig,
+    LlmHttpRequest, LlmProviderSpi, LlmToolInvocation, LlmToolSchema, LlmTurnResponse, McpError,
+    OpenAiProvider, QuestMcpServer, QuestXrAgent,
 };
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -505,4 +505,91 @@ fn test_live_all_three_providers_real_oauth_e2e() {
         "Live provider failures: {}",
         failures.join(" | ")
     );
+}
+
+#[test]
+fn test_agent_audience_profiles_and_tool_filtering_happy() {
+    assert_eq!(AgentAudience::Studio.default_goal(), AgentGoal::Release);
+    assert_eq!(
+        AgentAudience::Enterprise.default_goal(),
+        AgentGoal::FleetRelease
+    );
+    assert_eq!(AgentAudience::Platform.default_goal(), AgentGoal::Check);
+    assert_eq!(AgentAudience::Qa.default_goal(), AgentGoal::FleetRelease);
+    assert_eq!(AgentAudience::Developer.default_goal(), AgentGoal::Check);
+    assert!(AgentAudience::Developer.preferred_tools().is_empty());
+    assert!(AgentAudience::Qa
+        .preferred_tools()
+        .contains(&"fleet_discover"));
+
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let Ok(report) = QuestXrAgent::run_llm_in_process_with_audience(
+        &LlmAgentOptions {
+            project_dir: dir.path().to_path_buf(),
+            prompt: "Verify QA readiness".to_string(),
+            llm_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model: "gpt-4o-mini".to_string(),
+            api_key: String::new(),
+            max_turns: 2,
+        },
+        &OpenAiProvider,
+        AgentAudience::Qa,
+        |req| {
+            let sys = req["messages"][0]["content"].as_str().unwrap_or("");
+            assert!(sys.contains("QA & Release Manager"));
+            let tool_names: Vec<&str> = req["tools"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|t| t["function"]["name"].as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            assert_eq!(tool_names.len(), AgentAudience::Qa.preferred_tools().len());
+            assert!(tool_names.contains(&"verify_release"));
+            assert!(!tool_names.contains(&"init_project"));
+            Ok(json!({
+                "choices": [{
+                    "message": {
+                        "role": "assistant",
+                        "content": "QA audience check ready."
+                    }
+                }]
+            }))
+        },
+    ) else {
+        panic!("audience run");
+    };
+    assert_eq!(report.final_answer, "QA audience check ready.");
+}
+
+#[test]
+fn test_auth_fallback_helpers_happy() {
+    assert_eq!(
+        AutoLlmCredentialResolver::provider_api_key_env("gemini"),
+        "GEMINI_API_KEY"
+    );
+    assert_eq!(
+        AutoLlmCredentialResolver::provider_api_key_env("openai"),
+        "OPENAI_API_KEY"
+    );
+    assert_eq!(
+        AutoLlmCredentialResolver::provider_api_key_env("anthropic"),
+        "ANTHROPIC_API_KEY"
+    );
+
+    let cfg = AutoLlmCredentialResolver::config_with_api_key("anthropic", "sk-ant-123".to_string());
+    assert_eq!(cfg.provider_id, "anthropic");
+    assert_eq!(cfg.endpoint_url, "https://api.anthropic.com/v1/messages");
+    assert_eq!(cfg.auth_source, "prompt:api-key");
+
+    let err_401: McpError = std::io::Error::other("LLM HTTP 401: token_expired").into();
+    let err_403: McpError =
+        std::io::Error::other("LLM HTTP 403: oauth_not_allowed_for_organization").into();
+    let err_other: McpError = std::io::Error::other("LLM HTTP 500: internal error").into();
+    assert!(AutoLlmCredentialResolver::is_auth_error(&err_401));
+    assert!(AutoLlmCredentialResolver::is_auth_error(&err_403));
+    assert!(!AutoLlmCredentialResolver::is_auth_error(&err_other));
 }

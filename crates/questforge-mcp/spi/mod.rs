@@ -135,4 +135,54 @@ impl AutoLlmCredentialResolver {
             .into()
         })
     }
+
+    /// Canonical API-key environment variable name for a built-in provider.
+    #[must_use]
+    pub fn provider_api_key_env(provider_id: &str) -> &'static str {
+        match provider_id {
+            "gemini" => "GEMINI_API_KEY",
+            "anthropic" => "ANTHROPIC_API_KEY",
+            _ => "OPENAI_API_KEY",
+        }
+    }
+
+    /// Builds an [`LlmEndpointConfig`] from a caller-supplied or prompted API key.
+    #[must_use]
+    pub fn config_with_api_key(provider_id: &str, api_key: String) -> LlmEndpointConfig {
+        match provider_id {
+            "gemini" => LlmEndpointConfig {
+                provider_id: "gemini".to_string(),
+                endpoint_url:
+                    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+                        .to_string(),
+                default_model: "gemini-flash-lite-latest".to_string(),
+                api_key,
+                auth_source: "prompt:api-key".to_string(),
+            },
+            "anthropic" => LlmEndpointConfig {
+                provider_id: "anthropic".to_string(),
+                endpoint_url: "https://api.anthropic.com/v1/messages".to_string(),
+                default_model: "claude-3-5-sonnet-latest".to_string(),
+                api_key,
+                auth_source: "prompt:api-key".to_string(),
+            },
+            _ => LlmEndpointConfig {
+                provider_id: "openai".to_string(),
+                endpoint_url: "https://api.openai.com/v1/chat/completions".to_string(),
+                default_model: "gpt-4o-mini".to_string(),
+                api_key,
+                auth_source: "prompt:api-key".to_string(),
+            },
+        }
+    }
+
+    /// Returns `true` when an [`McpError`] represents an HTTP 401/403 authentication rejection.
+    #[must_use]
+    pub fn is_auth_error(err: &McpError) -> bool {
+        let msg = err.to_string();
+        msg.contains("LLM HTTP 401")
+            || msg.contains("LLM HTTP 403")
+            || msg.contains("token_expired")
+            || msg.contains("oauth_not_allowed")
+    }
 }
