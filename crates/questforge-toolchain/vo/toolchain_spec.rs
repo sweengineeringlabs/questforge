@@ -354,7 +354,16 @@ impl ToolchainProvisioner {
                 continue;
             }
 
-            let bytes = fetcher(&spec.url)?;
+            let bytes = match fetcher(&spec.url) {
+                Ok(b) => b,
+                Err(ToolchainError::Download { message, .. })
+                    if spec.tool == ToolKind::Adb && message.contains("404") =>
+                {
+                    let fallback = default_adb_latest_url(&platform);
+                    fetcher(&fallback)?
+                }
+                Err(err) => return Err(err),
+            };
             if let Some(expected) = &spec.sha256 {
                 verify_sha256(spec.tool, &spec.version, expected, &bytes)?;
             }
@@ -512,12 +521,24 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, ToolchainError> {
 }
 
 fn default_adb_url(platform: &PlatformTarget, version: &str) -> String {
+    if version.eq_ignore_ascii_case("latest") {
+        return default_adb_latest_url(platform);
+    }
     let os_tag = match platform.os.as_str() {
         "windows" => "windows",
         "macos" => "darwin",
         _ => "linux",
     };
     format!("https://dl.google.com/android/repository/platform-tools_r{version}-{os_tag}.zip")
+}
+
+fn default_adb_latest_url(platform: &PlatformTarget) -> String {
+    let os_tag = match platform.os.as_str() {
+        "windows" => "windows",
+        "macos" => "darwin",
+        _ => "linux",
+    };
+    format!("https://dl.google.com/android/repository/platform-tools-latest-{os_tag}.zip")
 }
 
 fn default_cmdline_tools_url(platform: &PlatformTarget, version: &str) -> String {
