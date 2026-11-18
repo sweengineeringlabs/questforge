@@ -148,7 +148,7 @@ fn test_xr_agent_in_process_heals_drift_and_completes_release_happy() {
         report,
         Ok(ref r)
             if r.passed
-                && r.discovered_tools.len() == 11
+                && r.discovered_tools.len() == 12
                 && r.steps.iter().any(|s| s.tool == "sync_project" && s.ok)
                 && r.steps.iter().any(|s| s.tool == "build_project" && s.ok)
     ));
