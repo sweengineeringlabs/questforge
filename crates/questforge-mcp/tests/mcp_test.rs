@@ -2,10 +2,12 @@
 
 use std::fs;
 
+use questforge_api::{LlmCredentialProvider, LlmEndpointConfig};
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
-    AgentGoal, AgentOptions, JsonRpcRequest, LlmAgentOptions, QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AutoLlmCredentialResolver, JsonRpcRequest, LlmAgentOptions,
+    QuestMcpServer, QuestXrAgent,
 };
 use serde_json::json;
 use tempfile::TempDir;
@@ -221,5 +223,45 @@ fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
                 && r.steps[0].tool == "check_source"
                 && r.steps[0].ok
                 && r.final_answer.contains("All 5 QuestForge static checks passed")
+    ));
+}
+
+struct MockEmptySpi;
+impl LlmCredentialProvider for MockEmptySpi {
+    fn provider_id(&self) -> &'static str {
+        "empty"
+    }
+    fn resolve(&self) -> Option<LlmEndpointConfig> {
+        None
+    }
+}
+
+struct MockFallbackSpi;
+impl LlmCredentialProvider for MockFallbackSpi {
+    fn provider_id(&self) -> &'static str {
+        "custom-spi"
+    }
+    fn resolve(&self) -> Option<LlmEndpointConfig> {
+        Some(LlmEndpointConfig {
+            provider_id: "custom-spi".to_string(),
+            endpoint_url: "https://custom.llm.local/v1/chat/completions".to_string(),
+            default_model: "custom-model".to_string(),
+            api_key: "spi-token".to_string(),
+            auth_source: "mock-spi".to_string(),
+        })
+    }
+}
+
+#[test]
+fn test_llm_credential_provider_spi_resolves_first_matching_happy() {
+    let empty = MockEmptySpi;
+    let fallback = MockFallbackSpi;
+    let resolved = AutoLlmCredentialResolver::resolve_from_slice(&[&empty, &fallback]);
+    assert!(matches!(
+        resolved,
+        Some(ref cfg)
+            if cfg.provider_id == "custom-spi"
+                && cfg.default_model == "custom-model"
+                && cfg.auth_source == "mock-spi"
     ));
 }

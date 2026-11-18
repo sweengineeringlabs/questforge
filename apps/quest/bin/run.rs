@@ -8,7 +8,10 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::{EngineKind, MdmTarget, QuestforgeConfig};
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
-use questforge_mcp::{AgentGoal, AgentOptions, LlmAgentOptions, QuestMcpServer, QuestXrAgent};
+use questforge_mcp::{
+    AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmAgentOptions, QuestMcpServer,
+    QuestXrAgent,
+};
 use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
@@ -838,26 +841,36 @@ fn run_agent(args: AgentArgs) -> ExitCode {
     };
 
     if let Some(prompt) = args.prompt {
-        let explicit_key = non_empty_env(&args.api_key_env);
-        let (default_url, default_model, discovered_key) = if explicit_key.is_some() {
-            (
-                "https://api.openai.com/v1/chat/completions".to_string(),
-                "gpt-4o-mini".to_string(),
-                None,
-            )
+        let explicit_key = std::env::var(&args.api_key_env)
+            .ok()
+            .filter(|k| !k.trim().is_empty());
+        let resolved = if explicit_key.is_some() {
+            None
         } else {
-            resolve_llm_credentials()
+            AutoLlmCredentialResolver::resolve_first()
         };
-        let api_key = explicit_key.or(discovered_key).unwrap_or_default();
 
+        let api_key = explicit_key
+            .or_else(|| resolved.as_ref().map(|r| r.api_key.clone()))
+            .unwrap_or_default();
         let llm_url = args
             .llm_url
-            .or_else(|| non_empty_env("QUESTFORGE_LLM_URL"))
-            .unwrap_or(default_url);
+            .or_else(|| {
+                std::env::var("QUESTFORGE_LLM_URL")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+            })
+            .or_else(|| resolved.as_ref().map(|r| r.endpoint_url.clone()))
+            .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string());
         let model = args
             .model
-            .or_else(|| non_empty_env("QUESTFORGE_LLM_MODEL"))
-            .unwrap_or(default_model);
+            .or_else(|| {
+                std::env::var("QUESTFORGE_LLM_MODEL")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+            })
+            .or_else(|| resolved.as_ref().map(|r| r.default_model.clone()))
+            .unwrap_or_else(|| "gpt-4o-mini".to_string());
         let llm_opts = LlmAgentOptions {
             project_dir: args.project_dir,
             prompt,
@@ -939,117 +952,6 @@ fn run_agent(args: AgentArgs) -> ExitCode {
             ExitCode::FAILURE
         }
     }
-}
-
-fn resolve_llm_credentials() -> (String, String, Option<String>) {
-    // 1. Gemini: gcloud OAuth -> GEMINI_API_KEY / GOOGLE_API_KEY fallback
-    if let Some(key) = discover_gemini_key_via_gcloud() {
-        return (
-            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
-            "gemini-flash-lite-latest".to_string(),
-            Some(key),
-        );
-    }
-    if let Some(key) = non_empty_env("GEMINI_API_KEY").or_else(|| non_empty_env("GOOGLE_API_KEY")) {
-        return (
-            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
-            "gemini-flash-lite-latest".to_string(),
-            Some(key),
-        );
-    }
-    // 2. OpenAI: OAuth token -> OPENAI_API_KEY fallback
-    if let Some(key) =
-        non_empty_env("OPENAI_OAUTH_TOKEN").or_else(|| non_empty_env("OPENAI_API_KEY"))
-    {
-        return (
-            "https://api.openai.com/v1/chat/completions".to_string(),
-            "gpt-4o-mini".to_string(),
-            Some(key),
-        );
-    }
-    // 3. Anthropic: OAuth token -> ANTHROPIC_API_KEY fallback
-    if let Some(key) =
-        non_empty_env("ANTHROPIC_OAUTH_TOKEN").or_else(|| non_empty_env("ANTHROPIC_API_KEY"))
-    {
-        return (
-            "https://api.anthropic.com/v1/chat/completions".to_string(),
-            "claude-3-5-sonnet-latest".to_string(),
-            Some(key),
-        );
-    }
-    // 4. Default fallback
-    (
-        "https://api.openai.com/v1/chat/completions".to_string(),
-        "gpt-4o-mini".to_string(),
-        None,
-    )
-}
-
-fn non_empty_env(name: &str) -> Option<String> {
-    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
-}
-
-fn discover_gemini_key_via_gcloud() -> Option<String> {
-    let gcloud = if cfg!(windows) {
-        "gcloud.cmd"
-    } else {
-        "gcloud"
-    };
-    let projects_out = std::process::Command::new(gcloud)
-        .args([
-            "projects",
-            "list",
-            "--filter=projectId:gen-lang-client*",
-            "--format=value(projectId)",
-            "--limit=5",
-        ])
-        .output()
-        .ok()?;
-    if !projects_out.status.success() {
-        return None;
-    }
-    for proj in String::from_utf8_lossy(&projects_out.stdout).lines() {
-        let proj = proj.trim();
-        if proj.is_empty() {
-            continue;
-        }
-        let keys_out = std::process::Command::new(gcloud)
-            .args([
-                "services",
-                "api-keys",
-                "list",
-                "--project",
-                proj,
-                "--filter=restrictions.apiTargets.service:generativelanguage.googleapis.com",
-                "--format=value(uid)",
-                "--limit=1",
-            ])
-            .output()
-            .ok()?;
-        let uid = String::from_utf8_lossy(&keys_out.stdout).trim().to_string();
-        if uid.is_empty() {
-            continue;
-        }
-        let str_out = std::process::Command::new(gcloud)
-            .args([
-                "services",
-                "api-keys",
-                "get-key-string",
-                &uid,
-                "--project",
-                proj,
-                "--format=value(keyString)",
-            ])
-            .output()
-            .ok()?;
-        if str_out.status.success() {
-            let key = String::from_utf8_lossy(&str_out.stdout).trim().to_string();
-            if !key.is_empty() {
-                return Some(key);
-            }
-        }
-    }
-    None
 }
 
 fn run_ops(args: OpsArgs) -> ExitCode {
