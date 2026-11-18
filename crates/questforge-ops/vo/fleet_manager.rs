@@ -150,7 +150,7 @@ impl OpsEnv {
                 let resp = ureq::post(url)
                     .set("Authorization", &auth)
                     .set("Content-Type", "application/json")
-                    .send_json(payload.clone())
+                    .send_string(&payload.to_string())
                     .map_err(|err| OpsError::AdbFailed {
                         args: format!("POST {url}"),
                         message: err.to_string(),
