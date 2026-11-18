@@ -13,7 +13,9 @@ use questforge_mcp::{
     AgentAudience, AgentGoal, AgentOptions, AutoLlmCredentialResolver, LlmEndpointConfig,
     QuestMcpServer, QuestXrAgent,
 };
-use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
+use questforge_ops::{
+    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, StoreUploadRequest,
+};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
@@ -467,6 +469,27 @@ enum OpsAction {
         /// Environment variable containing the MDM bearer token
         #[arg(long)]
         token_env: Option<String>,
+    },
+    /// Upload a signed APK directly to a Meta Horizon Store release channel via `ovr-platform-util`
+    StoreUpload {
+        /// Meta Horizon App ID (e.g. `1439257382612621`)
+        #[arg(long)]
+        app_id: String,
+        /// Path to the signed `.apk`
+        #[arg(long)]
+        apk: PathBuf,
+        /// Target release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`)
+        #[arg(long, default_value = "ALPHA")]
+        channel: String,
+        /// Environment variable holding the Meta Horizon App Secret
+        #[arg(long, default_value = "QUEST_META_APP_SECRET")]
+        app_secret_env: String,
+        /// Optional release notes
+        #[arg(long)]
+        notes: Option<String>,
+        /// Optional explicit path to `ovr-platform-util`
+        #[arg(long)]
+        ovr_bin: Option<PathBuf>,
     },
 }
 
@@ -1443,6 +1466,44 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 }
                 Err(err) => {
                     eprintln!("quest ops hms-push failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::StoreUpload {
+            app_id,
+            apk,
+            channel,
+            app_secret_env,
+            notes,
+            ovr_bin,
+        } => {
+            let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
+            let req = StoreUploadRequest {
+                app_id,
+                app_secret,
+                apk_path: apk,
+                channel,
+                release_notes: notes,
+                ovr_bin,
+            };
+            match FleetManager::upload_to_store(&req, &env) {
+                Ok(receipt) => {
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&receipt).unwrap_or_default()
+                        );
+                    } else {
+                        println!(
+                            "Uploaded to Meta Horizon Store (app_id: {}, channel: {}, sha256: {})",
+                            receipt.app_id, receipt.channel, receipt.apk_sha256
+                        );
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops store-upload failed: {err}");
                     ExitCode::FAILURE
                 }
             }

@@ -8,7 +8,9 @@ use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
 use questforge_config::EngineKind;
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
-use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
+use questforge_ops::{
+    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, StoreUploadRequest,
+};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, VerifyOptions};
 use serde::{Deserialize, Serialize};
@@ -251,6 +253,22 @@ impl QuestMcpServer {
                     }
                 }),
             },
+            McpToolDefinition {
+                name: "upload_store".to_string(),
+                description: "Upload a signed Quest APK directly to a Meta Horizon Store release channel via ovr-platform-util.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "required": ["app_id", "apk_path"],
+                    "properties": {
+                        "app_id": { "type": "string" },
+                        "apk_path": { "type": "string" },
+                        "channel": { "type": "string", "default": "ALPHA" },
+                        "app_secret_env": { "type": "string", "default": "QUEST_META_APP_SECRET" },
+                        "notes": { "type": "string" },
+                        "ovr_bin": { "type": "string" }
+                    }
+                }),
+            },
         ]
     }
 
@@ -368,6 +386,7 @@ impl QuestMcpServer {
             "fleet_discover" => call_fleet_discover(&args),
             "publish_mdm" => call_publish_mdm(&args),
             "setup_toolchain" => call_setup_toolchain(&args),
+            "upload_store" => call_upload_store(&args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -745,6 +764,51 @@ fn call_setup_toolchain(args: &Value) -> Result<String, String> {
     })
     .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
+}
+
+fn call_upload_store(args: &Value) -> Result<String, String> {
+    let app_id = args
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing app_id".to_string())?
+        .to_string();
+    let apk_path = PathBuf::from(
+        args.get("apk_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "missing apk_path".to_string())?,
+    );
+    let channel = args
+        .get("channel")
+        .and_then(|v| v.as_str())
+        .unwrap_or("ALPHA")
+        .to_string();
+    let secret_env = args
+        .get("app_secret_env")
+        .and_then(|v| v.as_str())
+        .unwrap_or("QUEST_META_APP_SECRET");
+    let app_secret = std::env::var(secret_env).unwrap_or_default();
+    let release_notes = args
+        .get("notes")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
+    let ovr_bin = args
+        .get("ovr_bin")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from);
+
+    let receipt = FleetManager::upload_to_store(
+        &StoreUploadRequest {
+            app_id,
+            app_secret,
+            apk_path,
+            channel,
+            release_notes,
+            ovr_bin,
+        },
+        &OpsEnv::System,
+    )
+    .map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
 }
 
 fn collect_doc_hits(dir: &Path, needle: &str, hits: &mut Vec<Value>) {

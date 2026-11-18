@@ -107,16 +107,19 @@ pub enum OpsEnv {
 
 impl OpsEnv {
     fn run_adb(&self, args: &[String]) -> Result<AdbOutput, OpsError> {
+        self.run_bin(Path::new("adb"), args)
+    }
+
+    fn run_bin(&self, bin: &Path, args: &[String]) -> Result<AdbOutput, OpsError> {
         match self {
             Self::System => {
-                let out =
-                    Command::new("adb")
-                        .args(args)
-                        .output()
-                        .map_err(|source| OpsError::Io {
-                            path: PathBuf::from("adb"),
-                            source,
-                        })?;
+                let out = Command::new(bin)
+                    .args(args)
+                    .output()
+                    .map_err(|source| OpsError::Io {
+                        path: bin.to_path_buf(),
+                        source,
+                    })?;
                 Ok(AdbOutput {
                     success: out.status.success(),
                     stdout: out.stdout,
@@ -251,6 +254,38 @@ pub struct HmsReleaseReceipt {
     pub device_group: String,
     /// Lowercase hex SHA-256 of the published `.apk`.
     pub apk_sha256: String,
+}
+
+/// Request to upload a Quest APK directly to a Meta Horizon Store release channel via `ovr-platform-util`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoreUploadRequest {
+    /// Meta Horizon App ID (e.g. `1439257382612621`).
+    pub app_id: String,
+    /// Meta Horizon App Secret.
+    pub app_secret: String,
+    /// Path to the signed Quest `.apk`.
+    pub apk_path: PathBuf,
+    /// Target release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`).
+    pub channel: String,
+    /// Optional release notes attached to the channel upload.
+    pub release_notes: Option<String>,
+    /// Optional explicit path to `ovr-platform-util`.
+    pub ovr_bin: Option<PathBuf>,
+}
+
+/// Receipt emitted after uploading a Quest APK to Meta Horizon Store via `ovr-platform-util`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoreUploadReceipt {
+    /// Meta Horizon App ID.
+    pub app_id: String,
+    /// Target release channel.
+    pub channel: String,
+    /// SHA-256 hex digest of the uploaded APK.
+    pub apk_sha256: String,
+    /// `ovr-platform-util` binary invoked.
+    pub ovr_bin: PathBuf,
+    /// Raw stdout from `ovr-platform-util`.
+    pub stdout: String,
 }
 
 /// Result of a single `quest ops agent` poll-and-execute cycle (`#13`).
@@ -614,6 +649,110 @@ impl FleetManager {
             apk_sha256,
         })
     }
+
+    /// Uploads a signed Quest APK directly to a Meta Horizon Store release channel via `ovr-platform-util`.
+    pub fn upload_to_store(
+        req: &StoreUploadRequest,
+        env: &OpsEnv,
+    ) -> Result<StoreUploadReceipt, OpsError> {
+        let endpoint = format!(
+            "https://developers.meta.com/vr/manage/applications/{}/release-channels/",
+            req.app_id.trim()
+        );
+        if req.app_id.trim().is_empty() {
+            return Err(OpsError::MdmFailed {
+                provider: "meta-store".to_string(),
+                endpoint,
+                message: "missing Meta Horizon App ID".to_string(),
+            });
+        }
+        if req.app_secret.trim().is_empty() {
+            return Err(OpsError::MdmFailed {
+                provider: "meta-store".to_string(),
+                endpoint,
+                message: "missing Meta Horizon App Secret".to_string(),
+            });
+        }
+        if req.channel.trim().is_empty() {
+            return Err(OpsError::MdmFailed {
+                provider: "meta-store".to_string(),
+                endpoint,
+                message: "missing target release channel".to_string(),
+            });
+        }
+
+        let apk_bytes = fs::read(&req.apk_path).map_err(|source| OpsError::Io {
+            path: req.apk_path.clone(),
+            source,
+        })?;
+        let apk_sha256 = hex::encode(Sha256::digest(&apk_bytes));
+        let ovr_bin = resolve_ovr_bin(req.ovr_bin.as_deref());
+
+        let mut args = vec![
+            "upload-quest-build".to_string(),
+            "--app_id".to_string(),
+            req.app_id.trim().to_string(),
+            "--app_secret".to_string(),
+            req.app_secret.trim().to_string(),
+            "--apk".to_string(),
+            req.apk_path.display().to_string(),
+            "--channel".to_string(),
+            req.channel.trim().to_string(),
+        ];
+        if let Some(notes) = req
+            .release_notes
+            .as_deref()
+            .filter(|n| !n.trim().is_empty())
+        {
+            args.push("--notes".to_string());
+            args.push(notes.trim().to_string());
+        }
+
+        let out = env.run_bin(&ovr_bin, &args)?;
+        if !out.success {
+            return Err(OpsError::MdmFailed {
+                provider: "meta-store".to_string(),
+                endpoint,
+                message: out.stderr.trim().to_string(),
+            });
+        }
+
+        Ok(StoreUploadReceipt {
+            app_id: req.app_id.trim().to_string(),
+            channel: req.channel.trim().to_string(),
+            apk_sha256,
+            ovr_bin,
+            stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        })
+    }
+}
+
+fn resolve_ovr_bin(explicit: Option<&Path>) -> PathBuf {
+    if let Some(p) = explicit {
+        return p.to_path_buf();
+    }
+    if let Ok(env_p) = std::env::var("OVR_PLATFORM_UTIL_PATH") {
+        let trimmed = env_p.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    let exe_name = if cfg!(windows) {
+        "ovr-platform-util.exe"
+    } else {
+        "ovr-platform-util"
+    };
+    if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        let cached = PathBuf::from(home)
+            .join(".questforge")
+            .join("tools")
+            .join("ovr-platform-util")
+            .join(exe_name);
+        if cached.exists() {
+            return cached;
+        }
+    }
+    PathBuf::from(exe_name)
 }
 
 fn run_adb_checked(env: &OpsEnv, args: &[String]) -> Result<AdbOutput, OpsError> {

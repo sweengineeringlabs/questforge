@@ -6,7 +6,7 @@ use std::path::Path;
 
 use questforge_ops::{
     AdbOutput, DeploymentRecord, FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider,
-    MockOpsEnv, OpsEnv, OpsError,
+    MockOpsEnv, OpsEnv, OpsError, StoreUploadRequest,
 };
 use tempfile::TempDir;
 
@@ -210,4 +210,46 @@ fn test_ops_publish_to_mdm_hms_and_missing_token_error() {
         &env,
     );
     assert!(matches!(missing_token, Err(OpsError::MdmFailed { .. })));
+}
+
+#[test]
+fn test_store_upload_happy_and_missing_secret_error() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("temp dir");
+    };
+    let apk = dir.path().join("app.apk");
+    assert!(fs::write(&apk, b"fake-signed-apk").is_ok());
+
+    let env = OpsEnv::Mock(MockOpsEnv::default());
+    let ok = FleetManager::upload_to_store(
+        &StoreUploadRequest {
+            app_id: "1439257382612621".to_string(),
+            app_secret: "secret-123".to_string(),
+            apk_path: apk.clone(),
+            channel: "ALPHA".to_string(),
+            release_notes: Some("Initial competition build".to_string()),
+            ovr_bin: None,
+        },
+        &env,
+    );
+    assert!(matches!(
+        ok,
+        Ok(ref r)
+            if r.app_id == "1439257382612621"
+                && r.channel == "ALPHA"
+                && !r.apk_sha256.is_empty()
+    ));
+
+    let missing_secret = FleetManager::upload_to_store(
+        &StoreUploadRequest {
+            app_id: "1439257382612621".to_string(),
+            app_secret: String::new(),
+            apk_path: apk,
+            channel: "ALPHA".to_string(),
+            release_notes: None,
+            ovr_bin: None,
+        },
+        &env,
+    );
+    assert!(matches!(missing_secret, Err(OpsError::MdmFailed { .. })));
 }
