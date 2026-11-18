@@ -17,8 +17,7 @@ mod vo;
 
 pub use self::error::McpError;
 pub use self::vo::{
-    AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, AnthropicCredentialProvider,
-    AutoLlmCredentialResolver, GeminiCredentialProvider, JsonRpcError, JsonRpcRequest,
-    JsonRpcResponse, LlmAgentOptions, LlmRunReport, McpToolDefinition, OpenAiCredentialProvider,
-    QuestMcpServer, QuestXrAgent,
+    AgentGoal, AgentOptions, AgentRunReport, AgentStepLog, AutoLlmCredentialResolver, JsonRpcError,
+    JsonRpcRequest, JsonRpcResponse, LlmAgentOptions, LlmCredentialProvider, LlmEndpointConfig,
+    LlmRunReport, McpToolDefinition, QuestMcpServer, QuestXrAgent,
 };

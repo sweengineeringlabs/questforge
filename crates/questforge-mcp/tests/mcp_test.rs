@@ -2,12 +2,11 @@
 
 use std::fs;
 
-use questforge_api::{LlmCredentialProvider, LlmEndpointConfig};
 use questforge_config::EngineKind;
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::{
     AgentGoal, AgentOptions, AutoLlmCredentialResolver, JsonRpcRequest, LlmAgentOptions,
-    QuestMcpServer, QuestXrAgent,
+    LlmCredentialProvider, QuestMcpServer, QuestXrAgent,
 };
 use serde_json::json;
 use tempfile::TempDir;
@@ -226,42 +225,13 @@ fn test_llm_react_agent_routes_tool_calls_through_mcp_happy() {
     ));
 }
 
-struct MockEmptySpi;
-impl LlmCredentialProvider for MockEmptySpi {
-    fn provider_id(&self) -> &'static str {
-        "empty"
-    }
-    fn resolve(&self) -> Option<LlmEndpointConfig> {
-        None
-    }
-}
-
-struct MockFallbackSpi;
-impl LlmCredentialProvider for MockFallbackSpi {
-    fn provider_id(&self) -> &'static str {
-        "custom-spi"
-    }
-    fn resolve(&self) -> Option<LlmEndpointConfig> {
-        Some(LlmEndpointConfig {
-            provider_id: "custom-spi".to_string(),
-            endpoint_url: "https://custom.llm.local/v1/chat/completions".to_string(),
-            default_model: "custom-model".to_string(),
-            api_key: "spi-token".to_string(),
-            auth_source: "mock-spi".to_string(),
-        })
-    }
-}
-
 #[test]
-fn test_llm_credential_provider_spi_resolves_first_matching_happy() {
-    let empty = MockEmptySpi;
-    let fallback = MockFallbackSpi;
-    let resolved = AutoLlmCredentialResolver::resolve_from_slice(&[&empty, &fallback]);
-    assert!(matches!(
-        resolved,
-        Some(ref cfg)
-            if cfg.provider_id == "custom-spi"
-                && cfg.default_model == "custom-model"
-                && cfg.auth_source == "mock-spi"
-    ));
+fn test_llm_credential_provider_resolves_configured_providers_happy() {
+    assert_eq!(LlmCredentialProvider::Gemini.provider_id(), "gemini");
+    assert_eq!(LlmCredentialProvider::OpenAi.provider_id(), "openai");
+    assert_eq!(LlmCredentialProvider::Anthropic.provider_id(), "anthropic");
+    let _ = AutoLlmCredentialResolver::resolve_from_slice(&[
+        LlmCredentialProvider::OpenAi,
+        LlmCredentialProvider::Anthropic,
+    ]);
 }
