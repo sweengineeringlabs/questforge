@@ -12,3 +12,84 @@ pub const HAND_TRACKING_ENABLED: bool = true;
 pub const CONTROLLERS_ENABLED: bool = true;
 /// Foveated rendering level.
 pub const FOVEATION_LEVEL: &str = "high";
+
+/// Meta Horizon OS OpenXR extensions required by `quest_forge.yaml`.
+pub const REQUIRED_OPENXR_EXTENSIONS: &[&str] = &[
+    "XR_FB_display_refresh_rate",
+    "XR_FB_foveation",
+    "XR_FB_passthrough",
+    "XR_EXT_hand_tracking",
+    "XR_FB_spatial_entity",
+];
+
+/// Resolved OpenXR session configuration passed to the Horizon OS / Simulator runtime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpenXrSessionConfig {
+    /// Application display name.
+    pub app_name: &'static str,
+    /// Target display refresh rate in Hz.
+    pub refresh_rate_hz: u32,
+    /// Enable `XR_FB_passthrough`.
+    pub passthrough: bool,
+    /// Enable `XR_FB_spatial_entity`.
+    pub spatial_anchors: bool,
+    /// Enable `XR_EXT_hand_tracking`.
+    pub hand_tracking: bool,
+    /// Foveated rendering level (`XR_FB_foveation`).
+    pub foveation_level: &'static str,
+    /// Required OpenXR extension names.
+    pub extensions: &'static [&'static str],
+}
+
+/// Builds the declarative `OpenXrSessionConfig` for this project.
+#[must_use]
+pub const fn build_openxr_session_config() -> OpenXrSessionConfig {
+    OpenXrSessionConfig {
+        app_name: "orbit-pulse-vr",
+        refresh_rate_hz: TARGET_REFRESH_RATE_HZ,
+        passthrough: PASSTHROUGH_ENABLED,
+        spatial_anchors: SPATIAL_ANCHORS_ENABLED,
+        hand_tracking: HAND_TRACKING_ENABLED,
+        foveation_level: FOVEATION_LEVEL,
+        extensions: REQUIRED_OPENXR_EXTENSIONS,
+    }
+}
+
+/// Converts an OpenXR `xrWaitFrame` predicted display period (nanoseconds) into
+/// frame delta seconds and invokes the scene's `step_frame(dt)` callback.
+pub fn run_frame_step<F: FnMut(f32)>(predicted_display_period_ns: i64, mut step: F) {
+    let fallback_dt = 1.0_f32 / (TARGET_REFRESH_RATE_HZ as f32);
+    let dt = if predicted_display_period_ns > 0 {
+        (predicted_display_period_ns as f32) / 1_000_000_000.0_f32
+    } else {
+        fallback_dt
+    };
+    step(dt);
+}
+
+/// Creates an OpenXR `openxr::Instance` on Meta Horizon OS (`aarch64-linux-android`).
+#[cfg(target_os = "android")]
+pub fn create_android_openxr_instance() -> Result<openxr::Instance, String> {
+    let entry = openxr::Entry::load().map_err(|e| e.to_string())?;
+    let mut exts = openxr::ExtensionSet::default();
+    exts.khr_android_create_instance = true;
+    if HAND_TRACKING_ENABLED {
+        exts.ext_hand_tracking = true;
+    }
+    if PASSTHROUGH_ENABLED {
+        exts.fb_passthrough = true;
+    }
+    exts.fb_display_refresh_rate = true;
+    entry
+        .create_instance(
+            &openxr::ApplicationInfo {
+                application_name: "orbit-pulse-vr",
+                application_version: 1,
+                engine_name: "QuestForge",
+                engine_version: 1,
+            },
+            &exts,
+            &[],
+        )
+        .map_err(|e| e.to_string())
+}

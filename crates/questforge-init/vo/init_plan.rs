@@ -210,7 +210,7 @@ impl ProjectScaffolder {
         })
     }
 
-    /// Runs sub-second static source checks (`QF-SPEC-001`, `QF-SYNC-001`, `QF-VRC-001`, `QF-PERF-001`)
+    /// Runs sub-second static source checks (`QF-SPEC-001`, `QF-SYNC-001`, `QF-VRC-001`, `QF-OXR-001`, `QF-PERF-001`)
     /// on `project_dir` (`quest check`).
     pub fn check_project(project_dir: &Path) -> Result<SourceCheckReport, InitError> {
         let cfg = QuestforgeConfig::load_from_dir(project_dir)?;
@@ -219,6 +219,7 @@ impl ProjectScaffolder {
             spec_finding,
             check_sync_drift(project_dir, &cfg, &specs),
             check_source_vrc(project_dir, &cfg),
+            check_openxr_parity(project_dir, &cfg),
             check_xr_perf_patterns(project_dir),
         ];
         let passed = findings.iter().all(|f| f.passed);
@@ -749,6 +750,99 @@ fn generate_android_manifest_xml(cfg: &QuestforgeConfig) -> String {
     )
 }
 
+fn required_openxr_extensions(cfg: &QuestforgeConfig) -> Vec<&'static str> {
+    let mut exts = vec!["XR_FB_display_refresh_rate"];
+    if cfg.xr_features.foveated_rendering != FoveationLevel::Off {
+        exts.push("XR_FB_foveation");
+    }
+    if cfg.xr_features.passthrough {
+        exts.push("XR_FB_passthrough");
+    }
+    if cfg.xr_features.input_modes.contains(&InputMode::Hands) {
+        exts.push("XR_EXT_hand_tracking");
+    }
+    if cfg.xr_features.spatial_anchors {
+        exts.push("XR_FB_spatial_entity");
+    }
+    exts
+}
+
+fn check_openxr_parity(project_dir: &Path, cfg: &QuestforgeConfig) -> SourceFinding {
+    let bootstrap_rel = match cfg.project.engine {
+        EngineKind::Unity => "Assets/Generated/QuestForgeBootstrap.gen.cs",
+        EngineKind::Unreal => "Source/QuestForge/QuestForgeBootstrap.gen.h",
+        EngineKind::Rust => "src/questforge_bootstrap_gen.rs",
+    };
+    let manifest_rel = match cfg.project.engine {
+        EngineKind::Unity => "Assets/Plugins/Android/AndroidManifest.xml",
+        EngineKind::Unreal => "Build/Android/AndroidManifest.xml",
+        EngineKind::Rust => "AndroidManifest.xml",
+    };
+
+    let Ok(bootstrap) = fs::read_to_string(project_dir.join(bootstrap_rel)) else {
+        return SourceFinding {
+            code: "QF-OXR-001".to_string(),
+            name: "OpenXR Extension & Manifest Parity".to_string(),
+            passed: false,
+            message: format!("Missing generated OpenXR bootstrap `{bootstrap_rel}`"),
+            remediation: Some(
+                "Run `quest sync` to generate OpenXR extension bindings.".to_string(),
+            ),
+        };
+    };
+    let Ok(manifest) = fs::read_to_string(project_dir.join(manifest_rel)) else {
+        return SourceFinding {
+            code: "QF-OXR-001".to_string(),
+            name: "OpenXR Extension & Manifest Parity".to_string(),
+            passed: false,
+            message: format!("Missing `{manifest_rel}`"),
+            remediation: Some("Run `quest sync` to generate AndroidManifest.xml.".to_string()),
+        };
+    };
+
+    let mut mismatches = Vec::new();
+    for ext in required_openxr_extensions(cfg) {
+        if !bootstrap.contains(ext) {
+            mismatches.push(format!("bootstrap missing `{ext}`"));
+        }
+    }
+    if cfg.xr_features.passthrough && !manifest.contains("com.oculus.feature.PASSTHROUGH") {
+        mismatches.push("manifest missing `com.oculus.feature.PASSTHROUGH`".to_string());
+    }
+    if cfg.xr_features.input_modes.contains(&InputMode::Hands)
+        && !manifest.contains("com.oculus.permission.HAND_TRACKING")
+    {
+        mismatches.push("manifest missing `com.oculus.permission.HAND_TRACKING`".to_string());
+    }
+    if cfg.xr_features.spatial_anchors && !manifest.contains("com.oculus.permission.USE_ANCHOR_API")
+    {
+        mismatches.push("manifest missing `com.oculus.permission.USE_ANCHOR_API`".to_string());
+    }
+
+    if mismatches.is_empty() {
+        SourceFinding {
+            code: "QF-OXR-001".to_string(),
+            name: "OpenXR Extension & Manifest Parity".to_string(),
+            passed: true,
+            message: format!(
+                "All {} Horizon OS OpenXR extension(s) and manifest permissions are in parity",
+                required_openxr_extensions(cfg).len()
+            ),
+            remediation: None,
+        }
+    } else {
+        SourceFinding {
+            code: "QF-OXR-001".to_string(),
+            name: "OpenXR Extension & Manifest Parity".to_string(),
+            passed: false,
+            message: mismatches.join("; "),
+            remediation: Some(
+                "Run `quest sync` to align OpenXR extensions and AndroidManifest.xml.".to_string(),
+            ),
+        }
+    }
+}
+
 fn foveation_label(level: FoveationLevel) -> &'static str {
     match level {
         FoveationLevel::Off => "off",
@@ -766,8 +860,13 @@ fn generate_unity_bootstrap_cs(cfg: &QuestforgeConfig) -> String {
         .input_modes
         .contains(&InputMode::Controllers);
     let fov = foveation_label(cfg.xr_features.foveated_rendering);
+    let exts = required_openxr_extensions(cfg)
+        .into_iter()
+        .map(|e| format!("\"{e}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
     format!(
-        "// AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\nusing UnityEngine;\n\nnamespace QuestForge.Generated\n{{\n    public static class QuestForgeBootstrap\n    {{\n        public const int TargetRefreshRateHz = {hz};\n        public const bool PassthroughEnabled = {passthrough};\n        public const bool SpatialAnchorsEnabled = {anchors};\n        public const bool HandTrackingEnabled = {hands};\n        public const bool ControllersEnabled = {controllers};\n        public const string FoveationLevel = \"{fov}\";\n\n        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]\n        private static void ApplyQuestForgeProfile()\n        {{\n            Application.targetFrameRate = TargetRefreshRateHz;\n            Debug.Log($\"[QuestForge] Profile initialized: {{TargetRefreshRateHz}}Hz, foveation={{FoveationLevel}}, passthrough={{PassthroughEnabled}}\");\n        }}\n    }}\n}}\n",
+        "// AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\nusing UnityEngine;\n\nnamespace QuestForge.Generated\n{{\n    public static class QuestForgeBootstrap\n    {{\n        public const int TargetRefreshRateHz = {hz};\n        public const bool PassthroughEnabled = {passthrough};\n        public const bool SpatialAnchorsEnabled = {anchors};\n        public const bool HandTrackingEnabled = {hands};\n        public const bool ControllersEnabled = {controllers};\n        public const string FoveationLevel = \"{fov}\";\n        public static readonly string[] RequiredOpenXrExtensions = new[] {{ {exts} }};\n\n        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]\n        private static void ApplyQuestForgeProfile()\n        {{\n            Application.targetFrameRate = TargetRefreshRateHz;\n            Debug.Log($\"[QuestForge] Profile initialized: {{TargetRefreshRateHz}}Hz, foveation={{FoveationLevel}}, passthrough={{PassthroughEnabled}}\");\n        }}\n    }}\n}}\n",
         hz = cfg.xr_features.refresh_rate_hz,
         passthrough = cfg.xr_features.passthrough,
         anchors = cfg.xr_features.spatial_anchors,
@@ -792,8 +891,9 @@ fn generate_unreal_default_engine_ini(cfg: &QuestforgeConfig) -> String {
 
 fn generate_unreal_bootstrap_h(cfg: &QuestforgeConfig) -> String {
     let fov = foveation_label(cfg.xr_features.foveated_rendering);
+    let exts = required_openxr_extensions(cfg).join(",");
     format!(
-        "// AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\n#pragma once\n\nnamespace QuestForgeGenerated\n{{\n    constexpr int kTargetRefreshRateHz = {hz};\n    constexpr bool kPassthroughEnabled = {passthrough};\n    constexpr bool kSpatialAnchorsEnabled = {anchors};\n    constexpr const char* kFoveationLevel = \"{fov}\";\n}}\n",
+        "// AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\n#pragma once\n\nnamespace QuestForgeGenerated\n{{\n    constexpr int kTargetRefreshRateHz = {hz};\n    constexpr bool kPassthroughEnabled = {passthrough};\n    constexpr bool kSpatialAnchorsEnabled = {anchors};\n    constexpr const char* kFoveationLevel = \"{fov}\";\n    constexpr const char* kRequiredOpenXrExtensions = \"{exts}\";\n}}\n",
         hz = cfg.xr_features.refresh_rate_hz,
         passthrough = cfg.xr_features.passthrough,
         anchors = cfg.xr_features.spatial_anchors,
@@ -1014,8 +1114,14 @@ fn generate_rust_bootstrap_rs(cfg: &QuestforgeConfig) -> String {
         .input_modes
         .contains(&InputMode::Controllers);
     let fov = foveation_label(cfg.xr_features.foveated_rendering);
+    let exts = required_openxr_extensions(cfg)
+        .into_iter()
+        .map(|e| format!("    \"{e}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
     format!(
-        "//! AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\n\n/// Target headset refresh rate in Hz.\npub const TARGET_REFRESH_RATE_HZ: u32 = {hz};\n/// True if Mixed Reality passthrough is enabled.\npub const PASSTHROUGH_ENABLED: bool = {passthrough};\n/// True if persistent spatial anchors are enabled.\npub const SPATIAL_ANCHORS_ENABLED: bool = {anchors};\n/// True if optical hand tracking is enabled.\npub const HAND_TRACKING_ENABLED: bool = {hands};\n/// True if Touch controllers are enabled.\npub const CONTROLLERS_ENABLED: bool = {controllers};\n/// Foveated rendering level.\npub const FOVEATION_LEVEL: &str = \"{fov}\";\n",
+        "//! AUTO-GENERATED BY `quest sync` FROM quest_forge.yaml. DO NOT EDIT BY HAND.\n\n/// Target headset refresh rate in Hz.\npub const TARGET_REFRESH_RATE_HZ: u32 = {hz};\n/// True if Mixed Reality passthrough is enabled.\npub const PASSTHROUGH_ENABLED: bool = {passthrough};\n/// True if persistent spatial anchors are enabled.\npub const SPATIAL_ANCHORS_ENABLED: bool = {anchors};\n/// True if optical hand tracking is enabled.\npub const HAND_TRACKING_ENABLED: bool = {hands};\n/// True if Touch controllers are enabled.\npub const CONTROLLERS_ENABLED: bool = {controllers};\n/// Foveated rendering level.\npub const FOVEATION_LEVEL: &str = \"{fov}\";\n\n/// Meta Horizon OS OpenXR extensions required by `quest_forge.yaml`.\npub const REQUIRED_OPENXR_EXTENSIONS: &[&str] = &[\n{exts}\n];\n\n/// Resolved OpenXR session configuration passed to the Horizon OS / Simulator runtime.\n#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub struct OpenXrSessionConfig {{\n    /// Application display name.\n    pub app_name: &'static str,\n    /// Target display refresh rate in Hz.\n    pub refresh_rate_hz: u32,\n    /// Enable `XR_FB_passthrough`.\n    pub passthrough: bool,\n    /// Enable `XR_FB_spatial_entity`.\n    pub spatial_anchors: bool,\n    /// Enable `XR_EXT_hand_tracking`.\n    pub hand_tracking: bool,\n    /// Foveated rendering level (`XR_FB_foveation`).\n    pub foveation_level: &'static str,\n    /// Required OpenXR extension names.\n    pub extensions: &'static [&'static str],\n}}\n\n/// Builds the declarative `OpenXrSessionConfig` for this project.\n#[must_use]\npub const fn build_openxr_session_config() -> OpenXrSessionConfig {{\n    OpenXrSessionConfig {{\n        app_name: \"{app_name}\",\n        refresh_rate_hz: TARGET_REFRESH_RATE_HZ,\n        passthrough: PASSTHROUGH_ENABLED,\n        spatial_anchors: SPATIAL_ANCHORS_ENABLED,\n        hand_tracking: HAND_TRACKING_ENABLED,\n        foveation_level: FOVEATION_LEVEL,\n        extensions: REQUIRED_OPENXR_EXTENSIONS,\n    }}\n}}\n\n/// Converts an OpenXR `xrWaitFrame` predicted display period (nanoseconds) into\n/// frame delta seconds and invokes the scene's `step_frame(dt)` callback.\npub fn run_frame_step<F: FnMut(f32)>(predicted_display_period_ns: i64, mut step: F) {{\n    let fallback_dt = 1.0_f32 / (TARGET_REFRESH_RATE_HZ as f32);\n    let dt = if predicted_display_period_ns > 0 {{\n        (predicted_display_period_ns as f32) / 1_000_000_000.0_f32\n    }} else {{\n        fallback_dt\n    }};\n    step(dt);\n}}\n\n/// Creates an OpenXR `openxr::Instance` on Meta Horizon OS (`aarch64-linux-android`).\n#[cfg(target_os = \"android\")]\npub fn create_android_openxr_instance() -> Result<openxr::Instance, String> {{\n    let entry = openxr::Entry::load().map_err(|e| e.to_string())?;\n    let mut exts = openxr::ExtensionSet::default();\n    exts.khr_android_create_instance = true;\n    if HAND_TRACKING_ENABLED {{\n        exts.ext_hand_tracking = true;\n    }}\n    if PASSTHROUGH_ENABLED {{\n        exts.fb_passthrough = true;\n    }}\n    exts.fb_display_refresh_rate = true;\n    entry\n        .create_instance(\n            &openxr::ApplicationInfo {{\n                application_name: \"{app_name}\",\n                application_version: 1,\n                engine_name: \"QuestForge\",\n                engine_version: 1,\n            }},\n            &exts,\n            &[],\n        )\n        .map_err(|e| e.to_string())\n}}\n",
+        app_name = cfg.project.name,
         hz = cfg.xr_features.refresh_rate_hz,
         passthrough = cfg.xr_features.passthrough,
         anchors = cfg.xr_features.spatial_anchors,

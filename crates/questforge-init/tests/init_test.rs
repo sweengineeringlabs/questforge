@@ -113,7 +113,7 @@ fn test_sync_and_check_project_detects_drift_and_perf_violations_happy() {
     assert!(target.join("Assets/Scripts/MainArenaActions.cs").exists());
 
     let initial_check = ProjectScaffolder::check_project(&target);
-    assert!(matches!(initial_check, Ok(ref r) if r.passed && r.findings.len() == 4));
+    assert!(matches!(initial_check, Ok(ref r) if r.passed && r.findings.len() == 5));
 
     assert!(fs::write(
         target.join("quest_forge.yaml"),
@@ -199,5 +199,14 @@ fn test_scaffold_rust_openxr_project_sync_and_check_happy() {
     assert!(target.join("src/main_arena_actions.rs").exists());
 
     let check = ProjectScaffolder::check_project(&target);
-    assert!(matches!(check, Ok(ref r) if r.passed && r.findings.len() == 4));
+    assert!(matches!(check, Ok(ref r) if r.passed && r.findings.len() == 5));
+
+    let bootstrap_rs = fs::read_to_string(target.join("src/questforge_bootstrap_gen.rs"));
+    assert!(matches!(
+        bootstrap_rs,
+        Ok(ref code)
+            if code.contains("XR_FB_display_refresh_rate")
+                && code.contains("build_openxr_session_config")
+                && code.contains("run_frame_step")
+    ));
 }

@@ -158,7 +158,7 @@ impl DoctorRunner {
             check_jdk(cfg_ref, env),
             check_android_sdk(cfg_ref, env),
             check_android_ndk(cfg_ref, env),
-            check_xr_sdk(&opts.project_dir, cfg_ref),
+            check_xr_sdk(&opts.project_dir, cfg_ref, env),
             check_adb_and_device(&opts.project_dir, opts.ci, env),
             check_signing_keystore(cfg_ref, opts.ci || opts.strict, env),
             check_swartch_gate(&opts.project_dir, opts.ci, env),
@@ -478,7 +478,17 @@ fn check_android_ndk(cfg: Option<&QuestforgeConfig>, env: &DoctorEnv) -> CheckRe
     }
 }
 
-fn check_xr_sdk(project_dir: &Path, cfg: Option<&QuestforgeConfig>) -> CheckResult {
+fn check_xr_sdk(
+    project_dir: &Path,
+    cfg: Option<&QuestforgeConfig>,
+    env: &DoctorEnv,
+) -> CheckResult {
+    let runtime_note = match env.env_var("XR_RUNTIME_JSON") {
+        Some(path) if Path::new(&path).exists() => format!("; OpenXR runtime active: {path}"),
+        Some(path) => format!("; XR_RUNTIME_JSON points to missing file: {path}"),
+        None => String::new(),
+    };
+
     if cfg.is_some_and(|c| c.project.engine == EngineKind::Rust) {
         let cargo_toml = project_dir.join("Cargo.toml");
         if let Ok(raw) = fs::read_to_string(&cargo_toml) {
@@ -487,7 +497,9 @@ fn check_xr_sdk(project_dir: &Path, cfg: Option<&QuestforgeConfig>) -> CheckResu
                     id: "QD-006".to_string(),
                     name: "Meta XR & OpenXR SDK".to_string(),
                     status: CheckStatus::Pass,
-                    details: "Native Rust `openxr` crate configured in Cargo.toml".to_string(),
+                    details: format!(
+                        "Native Rust `openxr` crate configured in Cargo.toml{runtime_note}"
+                    ),
                     remediation: None,
                 };
             }
@@ -534,7 +546,7 @@ fn check_xr_sdk(project_dir: &Path, cfg: Option<&QuestforgeConfig>) -> CheckResu
             id: "QD-006".to_string(),
             name: "Meta XR & OpenXR SDK".to_string(),
             status: CheckStatus::Pass,
-            details: "Meta XR SDK and OpenXR dependencies present".to_string(),
+            details: format!("Meta XR SDK and OpenXR dependencies present{runtime_note}"),
             remediation: None,
         }
     } else {
