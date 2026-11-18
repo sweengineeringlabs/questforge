@@ -44,9 +44,15 @@ struct SetupArgs {
     /// Override Android platform-tools (adb) version
     #[arg(long)]
     adb_version: Option<String>,
+    /// Expected SHA-256 hex digest for adb archive
+    #[arg(long)]
+    adb_sha256: Option<String>,
     /// Install Android cmdline-tools with the specified version
     #[arg(long)]
     cmdline_tools_version: Option<String>,
+    /// Expected SHA-256 hex digest for cmdline-tools archive
+    #[arg(long)]
+    cmdline_tools_sha256: Option<String>,
     /// Install ovr-platform-util with the specified version
     #[arg(long)]
     ovr_version: Option<String>,
@@ -56,6 +62,9 @@ struct SetupArgs {
     /// Expected SHA-256 hex digest for ovr-platform-util
     #[arg(long)]
     ovr_sha256: Option<String>,
+    /// Allow downloading archives without a SHA-256 checksum (disables zero-trust check)
+    #[arg(long)]
+    allow_unverified: bool,
     /// Override cache root (defaults to ~/.questforge/cache)
     #[arg(long)]
     cache_dir: Option<PathBuf>,
@@ -225,12 +234,15 @@ fn run_setup(args: SetupArgs) -> ExitCode {
     let opts = SetupOptions {
         project_dir: Some(args.project_dir),
         adb_version: args.adb_version,
+        adb_sha256: args.adb_sha256,
         cmdline_tools_version: args.cmdline_tools_version,
+        cmdline_tools_sha256: args.cmdline_tools_sha256,
         ovr_version: args.ovr_version,
         ovr_url: args.ovr_url,
         ovr_sha256: args.ovr_sha256,
         cache_dir: args.cache_dir,
         include_cmdline_tools: false,
+        require_checksum: !args.allow_unverified,
     };
 
     match ToolchainProvisioner::provision(&opts) {

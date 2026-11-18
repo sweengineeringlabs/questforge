@@ -40,6 +40,15 @@ pub enum ToolchainError {
         message: String,
     },
 
+    /// Missing SHA-256 checksum under zero-trust verification.
+    #[error("zero-trust policy requires a SHA-256 checksum for {tool} {version}")]
+    MissingChecksum {
+        /// Tool name.
+        tool: String,
+        /// Tool version.
+        version: String,
+    },
+
     /// SHA-256 integrity verification failed.
     #[error("checksum mismatch for {tool} {version}: expected {expected}, got {actual}")]
     ChecksumMismatch {

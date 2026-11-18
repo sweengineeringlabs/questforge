@@ -138,15 +138,24 @@ impl Default for ToolchainConfig {
 pub struct MetaVrCliConfig {
     /// Android `platform-tools` (`adb`) version.
     pub adb: String,
+    /// Expected SHA-256 hex digest for the `adb` archive.
+    pub adb_sha256: Option<String>,
+    /// Expected SHA-256 hex digest for Android `cmdline-tools` archive.
+    pub cmdline_tools_sha256: Option<String>,
     /// Optional Meta `ovr-platform-util` version.
     pub ovr_platform_util: Option<String>,
+    /// Expected SHA-256 hex digest for `ovr-platform-util`.
+    pub ovr_sha256: Option<String>,
 }
 
 impl Default for MetaVrCliConfig {
     fn default() -> Self {
         Self {
             adb: DEFAULT_ADB.to_string(),
+            adb_sha256: None,
+            cmdline_tools_sha256: None,
             ovr_platform_util: None,
+            ovr_sha256: None,
         }
     }
 }

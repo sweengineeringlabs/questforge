@@ -117,6 +117,29 @@ fn test_provision_checksum_mismatch_aborts_cleanly_error() {
 }
 
 #[test]
+fn test_provision_missing_checksum_rejected_by_zero_trust_error() {
+    let Ok(cache_dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let platform = PlatformTarget {
+        os: "linux".to_string(),
+        arch: "x64".to_string(),
+    };
+    let specs = vec![ToolArtifactSpec {
+        tool: ToolKind::Adb,
+        version: "35.0.2".to_string(),
+        url: "https://example.invalid/adb.zip".to_string(),
+        sha256: None,
+    }];
+
+    let res =
+        ToolchainProvisioner::provision_with_fetcher(platform, cache_dir.path(), &specs, |_| {
+            Ok(Vec::new())
+        });
+    assert!(matches!(res, Err(ToolchainError::MissingChecksum { .. })));
+}
+
+#[test]
 fn test_resolve_specs_reads_manifest_and_cli_override_edge() {
     let Ok(proj) = TempDir::new() else {
         panic!("failed to create tempdir");

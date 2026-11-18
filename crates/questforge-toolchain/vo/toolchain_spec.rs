@@ -117,14 +117,18 @@ pub struct ToolArtifactSpec {
 }
 
 /// Options controlling `quest setup` execution.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetupOptions {
     /// Optional path to directory containing `quest_forge.yaml`.
     pub project_dir: Option<PathBuf>,
     /// Override `adb` (`platform-tools`) version.
     pub adb_version: Option<String>,
+    /// Expected SHA-256 hex digest for `adb`.
+    pub adb_sha256: Option<String>,
     /// Override Android `cmdline-tools` version.
     pub cmdline_tools_version: Option<String>,
+    /// Expected SHA-256 hex digest for `cmdline-tools`.
+    pub cmdline_tools_sha256: Option<String>,
     /// Override `ovr-platform-util` version.
     pub ovr_version: Option<String>,
     /// Optional explicit download URL for `ovr-platform-util`.
@@ -135,6 +139,26 @@ pub struct SetupOptions {
     pub cache_dir: Option<PathBuf>,
     /// Skip `cmdline-tools` if false.
     pub include_cmdline_tools: bool,
+    /// Enforce zero-trust SHA-256 verification on every downloaded archive (default `true`).
+    pub require_checksum: bool,
+}
+
+impl Default for SetupOptions {
+    fn default() -> Self {
+        Self {
+            project_dir: None,
+            adb_version: None,
+            adb_sha256: None,
+            cmdline_tools_version: None,
+            cmdline_tools_sha256: None,
+            ovr_version: None,
+            ovr_url: None,
+            ovr_sha256: None,
+            cache_dir: None,
+            include_cmdline_tools: false,
+            require_checksum: true,
+        }
+    }
 }
 
 /// Result for an individual installed or cached tool.
@@ -205,11 +229,16 @@ impl ToolchainProvisioner {
             .or_else(|| cfg.as_ref().map(|c| c.toolchain.metavr_cli.adb.clone()))
             .unwrap_or_else(|| DEFAULT_ADB_VERSION.to_string());
 
+        let adb_sha256 = opts.adb_sha256.clone().or_else(|| {
+            cfg.as_ref()
+                .and_then(|c| c.toolchain.metavr_cli.adb_sha256.clone())
+        });
+
         let mut specs = vec![ToolArtifactSpec {
             tool: ToolKind::Adb,
             version: adb_version.clone(),
             url: default_adb_url(platform, &adb_version),
-            sha256: None,
+            sha256: adb_sha256,
         }];
 
         if opts.include_cmdline_tools || opts.cmdline_tools_version.is_some() {
@@ -217,11 +246,15 @@ impl ToolchainProvisioner {
                 .cmdline_tools_version
                 .clone()
                 .unwrap_or_else(|| DEFAULT_CMDLINE_TOOLS_VERSION.to_string());
+            let cmd_sha = opts.cmdline_tools_sha256.clone().or_else(|| {
+                cfg.as_ref()
+                    .and_then(|c| c.toolchain.metavr_cli.cmdline_tools_sha256.clone())
+            });
             specs.push(ToolArtifactSpec {
                 tool: ToolKind::CmdlineTools,
                 version: cmd_ver.clone(),
                 url: default_cmdline_tools_url(platform, &cmd_ver),
-                sha256: None,
+                sha256: cmd_sha,
             });
         }
 
@@ -237,14 +270,17 @@ impl ToolchainProvisioner {
                 .ok_or_else(|| ToolchainError::MissingSpec {
                     tool: ToolKind::OvrPlatformUtil.dir_name().to_string(),
                     version: version.clone(),
-                    reason: "provide --ovr-url (and optionally --ovr-sha256) for ovr-platform-util"
-                        .to_string(),
+                    reason: "provide --ovr-url and --ovr-sha256 for ovr-platform-util".to_string(),
                 })?;
+            let ovr_sha = opts.ovr_sha256.clone().or_else(|| {
+                cfg.as_ref()
+                    .and_then(|c| c.toolchain.metavr_cli.ovr_sha256.clone())
+            });
             specs.push(ToolArtifactSpec {
                 tool: ToolKind::OvrPlatformUtil,
                 version,
                 url,
-                sha256: opts.ovr_sha256.clone(),
+                sha256: ovr_sha,
             });
         }
 
@@ -259,10 +295,16 @@ impl ToolchainProvisioner {
             Some(dir) => dir.clone(),
             None => Self::default_cache_dir()?,
         };
-        Self::provision_with_fetcher(platform, &cache_root, &specs, download_bytes)
+        Self::provision_with_fetcher_policy(
+            platform,
+            &cache_root,
+            &specs,
+            opts.require_checksum,
+            download_bytes,
+        )
     }
 
-    /// Provisions the given specs using a custom byte fetcher (enables deterministic offline tests).
+    /// Provisions the given specs using a custom byte fetcher under zero-trust checksum policy.
     pub fn provision_with_fetcher<F>(
         platform: PlatformTarget,
         cache_root: &Path,
@@ -272,8 +314,29 @@ impl ToolchainProvisioner {
     where
         F: Fn(&str) -> Result<Vec<u8>, ToolchainError>,
     {
+        Self::provision_with_fetcher_policy(platform, cache_root, specs, true, fetcher)
+    }
+
+    /// Provisions the given specs with configurable checksum enforcement.
+    pub fn provision_with_fetcher_policy<F>(
+        platform: PlatformTarget,
+        cache_root: &Path,
+        specs: &[ToolArtifactSpec],
+        require_checksum: bool,
+        fetcher: F,
+    ) -> Result<SetupReport, ToolchainError>
+    where
+        F: Fn(&str) -> Result<Vec<u8>, ToolchainError>,
+    {
         let mut installed = Vec::with_capacity(specs.len());
         for spec in specs {
+            if require_checksum && spec.sha256.as_deref().is_none_or(|s| s.trim().is_empty()) {
+                return Err(ToolchainError::MissingChecksum {
+                    tool: spec.tool.dir_name().to_string(),
+                    version: spec.version.clone(),
+                });
+            }
+
             let install_dir = cache_root
                 .join(platform.cache_key())
                 .join(spec.tool.dir_name())
