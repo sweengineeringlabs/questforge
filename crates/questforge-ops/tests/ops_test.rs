@@ -1,10 +1,12 @@
 //! Integration tests for `questforge-ops`.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 
 use questforge_ops::{
-    AdbOutput, DeploymentRecord, FleetInventory, FleetManager, MockOpsEnv, OpsEnv, OpsError,
+    AdbOutput, DeploymentRecord, FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider,
+    MockOpsEnv, OpsEnv, OpsError,
 };
 use tempfile::TempDir;
 
@@ -41,7 +43,10 @@ fn test_ops_discover_telemetry_deploy_rollback_happy() {
         },
     );
 
-    let env = OpsEnv::Mock(MockOpsEnv { responses });
+    let env = OpsEnv::Mock(MockOpsEnv {
+        responses,
+        ..Default::default()
+    });
     let mut inv = FleetInventory::default();
 
     let found = FleetManager::discover(&mut inv, "qa-lab", &env);
@@ -94,7 +99,10 @@ fn test_ops_logcat_and_screenshot_capture_happy() {
             stderr: String::new(),
         },
     );
-    let env = OpsEnv::Mock(MockOpsEnv { responses });
+    let env = OpsEnv::Mock(MockOpsEnv {
+        responses,
+        ..Default::default()
+    });
 
     let log_path = dir.path().join("device.log");
     let shot_path = dir.path().join("screen.png");
@@ -126,7 +134,10 @@ fn test_ops_agent_executes_matching_scheduled_deployments_happy() {
             stderr: String::new(),
         },
     );
-    let env = OpsEnv::Mock(MockOpsEnv { responses });
+    let env = OpsEnv::Mock(MockOpsEnv {
+        responses,
+        ..Default::default()
+    });
     let mut inv = FleetInventory::default();
     let pending = vec![DeploymentRecord {
         target: "qa-lab".to_string(),
@@ -144,4 +155,59 @@ fn test_ops_agent_executes_matching_scheduled_deployments_happy() {
                 && r.executed_deployments.len() == 1
                 && r.executed_deployments[0].status == "deployed"
     ));
+}
+
+#[test]
+fn test_ops_publish_to_mdm_hms_and_missing_token_error() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let apk_path = dir.path().join("orbit.apk");
+    assert!(fs::write(&apk_path, b"PK\x03\x04dummy-apk").is_ok());
+
+    let mut http_responses = BTreeMap::new();
+    http_responses.insert(
+        MdmProvider::MetaHms.default_endpoint().to_string(),
+        r#"{"id":"hms-rel-42","status":"published"}"#.to_string(),
+    );
+    let env = OpsEnv::Mock(MockOpsEnv {
+        http_responses,
+        ..Default::default()
+    });
+
+    let receipt = FleetManager::publish_to_mdm(
+        &HmsReleaseRequest {
+            provider: MdmProvider::MetaHms,
+            app_id: "app-123".to_string(),
+            apk_path: apk_path.clone(),
+            channel: "PRODUCTION".to_string(),
+            device_group: "training-floor".to_string(),
+            endpoint: None,
+            access_token: "hms-secret-token".to_string(),
+        },
+        &env,
+    );
+    assert!(matches!(
+        receipt,
+        Ok(ref r)
+            if r.provider == "meta-hms"
+                && r.release_id == "hms-rel-42"
+                && r.status == "published"
+                && r.device_group == "training-floor"
+                && !r.apk_sha256.is_empty()
+    ));
+
+    let missing_token = FleetManager::publish_to_mdm(
+        &HmsReleaseRequest {
+            provider: MdmProvider::ManageXr,
+            app_id: "app-123".to_string(),
+            apk_path,
+            channel: "BETA".to_string(),
+            device_group: "qa-lab".to_string(),
+            endpoint: None,
+            access_token: String::new(),
+        },
+        &env,
+    );
+    assert!(matches!(missing_token, Err(OpsError::AdbFailed { .. })));
 }

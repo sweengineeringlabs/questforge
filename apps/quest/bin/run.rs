@@ -9,7 +9,7 @@ use questforge_config::EngineKind;
 use questforge_doctor::{CheckStatus, DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_mcp::QuestMcpServer;
-use questforge_ops::{FleetInventory, FleetManager, OpsEnv};
+use questforge_ops::{FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv};
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, ReportFormat, VerifyOptions};
@@ -335,6 +335,47 @@ enum OpsAction {
         #[arg(long, default_value = "qa-lab")]
         group: String,
     },
+    /// Publish a verified APK to Meta Horizon Managed Services (HMS) or an enterprise MDM
+    HmsPush {
+        /// Target MDM provider (`meta-hms`, `managexr`, `arborxr`)
+        #[arg(long, value_enum, default_value_t = CliMdmProvider::MetaHms)]
+        provider: CliMdmProvider,
+        /// Application ID in the MDM
+        #[arg(long)]
+        app_id: String,
+        /// Path to the verified `.apk`
+        #[arg(long)]
+        apk: PathBuf,
+        /// Release channel or track (e.g. ALPHA, BETA, PRODUCTION)
+        #[arg(long, default_value = "PRODUCTION")]
+        channel: String,
+        /// Target MDM device group
+        #[arg(long, default_value = "default")]
+        group: String,
+        /// Optional custom MDM endpoint URL
+        #[arg(long)]
+        endpoint: Option<String>,
+        /// Environment variable containing the MDM bearer token
+        #[arg(long, default_value = "QUESTFORGE_MDM_TOKEN")]
+        token_env: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliMdmProvider {
+    MetaHms,
+    ManageXr,
+    ArborXr,
+}
+
+impl From<CliMdmProvider> for MdmProvider {
+    fn from(value: CliMdmProvider) -> Self {
+        match value {
+            CliMdmProvider::MetaHms => Self::MetaHms,
+            CliMdmProvider::ManageXr => Self::ManageXr,
+            CliMdmProvider::ArborXr => Self::ArborXr,
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -905,6 +946,50 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 }
                 Err(err) => {
                     eprintln!("quest ops agent failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::HmsPush {
+            provider,
+            app_id,
+            apk,
+            channel,
+            group,
+            endpoint,
+            token_env,
+        } => {
+            let token = std::env::var(&token_env).unwrap_or_default();
+            let req = HmsReleaseRequest {
+                provider: provider.into(),
+                app_id,
+                apk_path: apk,
+                channel,
+                device_group: group,
+                endpoint,
+                access_token: token,
+            };
+            match FleetManager::publish_to_mdm(&req, &env) {
+                Ok(receipt) => {
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&receipt).unwrap_or_default()
+                        );
+                    } else {
+                        println!(
+                            "Published to {} (release: {}, status: {}, group: {}, sha256: {})",
+                            receipt.provider,
+                            receipt.release_id,
+                            receipt.status,
+                            receipt.device_group,
+                            receipt.apk_sha256
+                        );
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops hms-push failed: {err}");
                     ExitCode::FAILURE
                 }
             }

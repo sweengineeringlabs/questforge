@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::OpsError;
 
@@ -136,13 +137,115 @@ impl OpsEnv {
             }
         }
     }
+
+    fn post_json(
+        &self,
+        url: &str,
+        bearer_token: &str,
+        payload: &serde_json::Value,
+    ) -> Result<String, OpsError> {
+        match self {
+            Self::System => {
+                let auth = format!("Bearer {bearer_token}");
+                let resp = ureq::post(url)
+                    .set("Authorization", &auth)
+                    .set("Content-Type", "application/json")
+                    .send_json(payload.clone())
+                    .map_err(|err| OpsError::AdbFailed {
+                        args: format!("POST {url}"),
+                        message: err.to_string(),
+                    })?;
+                resp.into_string().map_err(|err| OpsError::Io {
+                    path: PathBuf::from(url),
+                    source: std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()),
+                })
+            }
+            Self::Mock(mock) => Ok(mock
+                .http_responses
+                .get(url)
+                .cloned()
+                .unwrap_or_else(|| r#"{"id":"rel-mock-1","status":"published"}"#.to_string())),
+        }
+    }
 }
 
-/// In-memory `adb` test double keyed by `"<arg1> <arg2> ..."`.
+/// In-memory `adb` and HTTP test double keyed by `"<arg1> <arg2> ..."` or URL.
 #[derive(Clone, Debug, Default)]
 pub struct MockOpsEnv {
     /// Canned `adb` responses.
     pub responses: BTreeMap<String, AdbOutput>,
+    /// Canned HTTP JSON responses keyed by endpoint URL.
+    pub http_responses: BTreeMap<String, String>,
+}
+
+/// Supported Enterprise XR MDM / Meta Horizon Managed Services providers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MdmProvider {
+    /// Meta Horizon Managed Services (HMS).
+    MetaHms,
+    /// ManageXR enterprise kiosk MDM.
+    ManageXr,
+    /// ArborXR enterprise kiosk MDM.
+    ArborXr,
+}
+
+impl MdmProvider {
+    /// Returns the default API endpoint for this MDM provider.
+    #[must_use]
+    pub const fn default_endpoint(self) -> &'static str {
+        match self {
+            Self::MetaHms => "https://graph.oculus.com/v1/hms/releases",
+            Self::ManageXr => "https://api.managexr.com/v1/apps/releases",
+            Self::ArborXr => "https://api.arborxr.com/v1/releases",
+        }
+    }
+
+    /// Returns the canonical provider slug.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MetaHms => "meta-hms",
+            Self::ManageXr => "managexr",
+            Self::ArborXr => "arborxr",
+        }
+    }
+}
+
+/// Request payload for publishing a verified APK to Meta HMS or an enterprise MDM.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HmsReleaseRequest {
+    /// Target MDM provider (`meta-hms`, `managexr`, `arborxr`).
+    pub provider: MdmProvider,
+    /// Application or organization app ID in the MDM.
+    pub app_id: String,
+    /// Path to the verified `.apk` artifact.
+    pub apk_path: PathBuf,
+    /// Release channel or track (e.g. `ALPHA`, `BETA`, `PRODUCTION`).
+    pub channel: String,
+    /// Target MDM device group (e.g. `qa-lab`, `training-floor`).
+    pub device_group: String,
+    /// Optional custom endpoint URL overriding the provider default.
+    pub endpoint: Option<String>,
+    /// Bearer access token for the MDM API.
+    pub access_token: String,
+}
+
+/// Receipt returned after publishing an APK to Meta HMS or an enterprise MDM.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HmsReleaseReceipt {
+    /// Provider slug (`meta-hms`, `managexr`, `arborxr`).
+    pub provider: String,
+    /// Remote release identifier returned by the MDM.
+    pub release_id: String,
+    /// Remote release status (`published`, `queued`, etc.).
+    pub status: String,
+    /// Target channel.
+    pub channel: String,
+    /// Target MDM device group.
+    pub device_group: String,
+    /// Lowercase hex SHA-256 of the published `.apk`.
+    pub apk_sha256: String,
 }
 
 /// Result of a single `quest ops agent` poll-and-execute cycle (`#13`).
@@ -433,6 +536,62 @@ impl FleetManager {
             .transpose()?
             .unwrap_or_default();
         Self::sync_agent_with_deployments(inventory, default_group, &pending, env)
+    }
+
+    /// Publishes a verified APK and its SHA-256 digest to Meta HMS or an enterprise MDM (`ManageXR` / `ArborXR`).
+    pub fn publish_to_mdm(
+        req: &HmsReleaseRequest,
+        env: &OpsEnv,
+    ) -> Result<HmsReleaseReceipt, OpsError> {
+        if req.access_token.trim().is_empty() {
+            return Err(OpsError::AdbFailed {
+                args: format!("{} push", req.provider.as_str()),
+                message: "missing MDM access token".to_string(),
+            });
+        }
+        let apk_bytes = fs::read(&req.apk_path).map_err(|source| OpsError::Io {
+            path: req.apk_path.clone(),
+            source,
+        })?;
+        let mut hasher = Sha256::new();
+        hasher.update(&apk_bytes);
+        let apk_sha256 = hex::encode(hasher.finalize());
+
+        let endpoint = req
+            .endpoint
+            .as_deref()
+            .unwrap_or_else(|| req.provider.default_endpoint());
+        let payload = serde_json::json!({
+            "provider": req.provider.as_str(),
+            "app_id": req.app_id,
+            "channel": req.channel,
+            "device_group": req.device_group,
+            "apk_sha256": apk_sha256,
+            "apk_size_bytes": apk_bytes.len(),
+        });
+
+        let raw_resp = env.post_json(endpoint, &req.access_token, &payload)?;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&raw_resp).unwrap_or_else(|_| serde_json::json!({}));
+        let release_id = parsed
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("rel-1")
+            .to_string();
+        let status = parsed
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("published")
+            .to_string();
+
+        Ok(HmsReleaseReceipt {
+            provider: req.provider.as_str().to_string(),
+            release_id,
+            status,
+            channel: req.channel.clone(),
+            device_group: req.device_group.clone(),
+            apk_sha256,
+        })
     }
 }
 

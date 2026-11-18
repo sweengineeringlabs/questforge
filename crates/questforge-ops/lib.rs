@@ -18,5 +18,5 @@ mod vo;
 pub use self::error::OpsError;
 pub use self::vo::{
     AdbOutput, AgentSyncReport, DeploymentRecord, DeviceRecord, FleetInventory, FleetManager,
-    MockOpsEnv, OpsEnv,
+    HmsReleaseReceipt, HmsReleaseRequest, MdmProvider, MockOpsEnv, OpsEnv,
 };

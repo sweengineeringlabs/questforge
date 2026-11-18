@@ -8,5 +8,5 @@ mod fleet_manager;
 
 pub use self::fleet_manager::{
     AdbOutput, AgentSyncReport, DeploymentRecord, DeviceRecord, FleetInventory, FleetManager,
-    MockOpsEnv, OpsEnv,
+    HmsReleaseReceipt, HmsReleaseRequest, MdmProvider, MockOpsEnv, OpsEnv,
 };
