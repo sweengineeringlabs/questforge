@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "questforge": {
+      "command": "quest",
+      "args": ["mcp", "--workspace-root", "."]
+    }
+  }
+}
