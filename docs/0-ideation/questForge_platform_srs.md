@@ -2,7 +2,7 @@
 
 **Audience**: Product managers, systems engineers, QA leads, and QuestForge contributors
 
-> **TLDR**: Software Requirements Specification (SRS) defining stakeholders, system architecture, functional requirements (`QD-001`..`QD-009`, `QV-001`..`QV-006`, `QO-001`..`QO-010`, `MCP-001`..`MCP-008`), non-functional requirements, and security controls for the QuestForge Meta Quest DevOps Platform Suite.
+> **TLDR**: Software Requirements Specification (SRS) defining stakeholders, system architecture, functional requirements (`QD-001`..`QD-009`, `QV-001`..`QV-010`, `QO-001`..`QO-013`, `MCP-001`..`MCP-016`), non-functional requirements, and security controls for the QuestForge Meta Quest DevOps Platform Suite.
 
 # Meta Quest DevOps Platform Suite
 
@@ -303,6 +303,18 @@ Manage device groups.
 
 Schedule deployments.
 
+### QO-011
+
+Connect wireless ADB endpoints.
+
+### QO-012
+
+Pair wireless ADB endpoints with pairing code.
+
+### QO-013
+
+Manage release channel testers (invite, list, deep-link).
+
 ## Dashboard Features
 
 - Device Inventory
@@ -352,6 +364,14 @@ Generate release reports.
 ### BVP-008
 
 Generate release scorecards.
+
+### BVP-009
+
+Validate private data backup security (`android:allowBackup="false"`).
+
+### BVP-010
+
+Validate Meta Horizon Store submission readiness (assets, privacy policy, terms, support, IARC rating).
 
 ## Compliance Reports
 

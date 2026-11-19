@@ -42,7 +42,7 @@ Reference: [docs/3-design/architecture.md](../architecture.md#layer-responsibili
 Reference: [docs/3-design/architecture.md](../architecture.md#ai--llm-agent-interaction-flow-quest-agent--quest-mcp)
 
 - [x] All autonomous and LLM-driven agent operations (`quest agent --role`) route strictly through `quest mcp` over JSON-RPC 2.0 (`initialize` → `tools/list` → `tools/call`).
-- [x] All 14 MCP tools (`doctor_check`, `sync_project`, `check_source`, `init_project`, `build_project`, `verify_release`, `generate_pipeline`, `analyze_build_failure`, `search_docs`, `fleet_discover`, `publish_mdm`, `setup_toolchain`, `upload_store`, `ovr_store`) return deterministic JSON payloads.
+- [x] All 16 MCP tools (`doctor_check`, `sync_project`, `check_source`, `init_project`, `build_project`, `verify_release`, `generate_pipeline`, `analyze_build_failure`, `search_docs`, `fleet_discover`, `publish_mdm`, `setup_toolchain`, `upload_store`, `ovr_store`, `manage_channel_testers`, `fleet_connect`) return deterministic JSON payloads.
 - [x] LLM provider wire formats and OAuth/API-key resolution are isolated behind `LlmProviderSpi` (`GeminiProvider`, `OpenAiProvider`, `AnthropicProvider`).
 
 ---

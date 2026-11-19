@@ -23,9 +23,9 @@
 **QuestForge** puts autonomous, role-based AI agents (`studio`, `enterprise`, `platform`, `qa`, `developer`) in charge of the **Meta Quest** and **Meta Horizon OS** engineering, compliance, and release lifecycle:
 - **Declarative XR Scaffolding & Codegen (`quest init`, `quest sync`, `quest check`)** across Unity (`engine: unity`), Unreal Engine (`engine: unreal`), and Native Rust OpenXR (`engine: rust`).
 - **Zero-Trust Toolchain & Workstation Diagnostics (`quest setup`, `quest doctor --fix`)** across Windows and Linux / WSL.
-- **Headless CI Builds, CycloneDX SBOMs & `0–100` VRC Verification (`quest ci`, `quest verify`)** prior to store or MDM submission.
-- **14-Tool MCP Server & Role-Based AI Agents (`quest mcp`, `quest agent --role`, `quest auth`)** with `Gemini`, `OpenAI`, and `Anthropic`.
-- **Lab Fleet, Meta Horizon Store (`ovr-platform-util` 1:1) & Enterprise MDM (`quest ops`, `quest serve`, `web/`)**.
+- **Headless CI Builds, CycloneDX SBOMs & `0–100` VRC Verification (`quest ci`, `quest verify`)** with `QV-001`..`QV-010` policy checks prior to store or MDM submission.
+- **16-Tool MCP Server & Role-Based AI Agents (`quest mcp`, `quest agent --role`, `quest auth`)** with `Gemini`, `OpenAI`, and `Anthropic`.
+- **Lab Fleet, Meta Horizon Store (`ovr-platform-util` 1:1), Channel Testers, Wireless ADB & Enterprise MDM (`quest ops`, `quest serve`, `web/`)**.
 
 ---
 
@@ -35,8 +35,8 @@
 |---|---|
 | Hand-editing `AndroidManifest.xml` & OpenXR boilerplate | Declarative `quest_forge.yaml` + `specs/*_xr.yaml` → `quest sync` & `quest check` (`QF-SPEC`, `QF-SYNC`, `QF-VRC`, `QF-OXR`, `QF-PERF`) |
 | Workstation & CI SDK/NDK/ADB/OVR drift | Zero-trust SHA-256 `quest setup` (including Linux via WSL interop) + `quest doctor --fix` (`QD-001`..`QD-009`) |
-| Surprise Meta Horizon Store VRC rejections | Pre-upload static binary verification (`quest verify` `QV-001`..`QV-006`) with `0–100` scorecards in CLI, JSON, SARIF, HTML, and PDF |
-| Disconnected store & enterprise fleet rollouts | `quest ops store` (1:1 `ovr-platform-util`), `quest ops hms-push` (Meta HMS, ManageXR, ArborXR), and `quest serve` Control Plane |
+| Surprise Meta Horizon Store VRC & security rejections | Pre-upload static binary verification (`quest verify` `QV-001`..`QV-010`, including `QV-009` backup security and `QV-010` store assets) with `0–100` scorecards in CLI, JSON, SARIF, HTML, and PDF |
+| Disconnected store & enterprise fleet rollouts | `quest ops store` (1:1 `ovr-platform-util`), `quest ops testers` (Graph API & portal deep-links), wireless ADB (`quest ops connect`/`pair`), `quest ops hms-push` (Meta HMS, ManageXR, ArborXR), and `quest serve` Control Plane |
 
 ---
 
@@ -54,7 +54,7 @@
 - [Architecture Decision Records (`3-design/adr/`)](3-design/adr/README.md) — Index of recorded architectural decisions ([ADR-001](3-design/adr/001_stratified_architecture_and_mcp_routing.md), [ADR-002](3-design/adr/002_stratified_input_and_gesture_kinematics.md))
 - [Role Workflows Index (`3-design/workflow/`)](3-design/workflow/README.md) — Multi-role ecosystem overview
   - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen
-  - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 14-tool MCP agent workflow
+  - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 16-tool MCP agent workflow
   - [Platform Workflow (`--role platform`)](3-design/workflow/platform.md) — CI/CD orchestration, zero-trust toolchains, and failure diagnostics
   - [QA & Release Workflow (`--role qa`)](3-design/workflow/qa.md) — `100/100` VRC verification, lab headset rollout, and Horizon Store uploads
   - [Enterprise Workflow (`--role enterprise`)](3-design/workflow/enterprise.md) — Control plane governance, RBAC, and Meta HMS / MDM distribution

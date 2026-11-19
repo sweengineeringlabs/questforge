@@ -640,6 +640,14 @@ Generate release reports.
 
 Generate scorecards.
 
+### QV-009
+
+Validate private data backup security (`android:allowBackup="false"`).
+
+### QV-010
+
+Validate Meta Horizon Store submission readiness (assets, privacy policy, terms, support, IARC rating).
+
 ---
 
 ## Architecture
@@ -894,6 +902,18 @@ Manage groups.
 ### QO-010
 
 Schedule deployments.
+
+### QO-011
+
+Connect wireless ADB endpoints.
+
+### QO-012
+
+Pair wireless ADB endpoints with pairing code.
+
+### QO-013
+
+Manage release channel testers (invite, list, deep-link).
 
 ---
 

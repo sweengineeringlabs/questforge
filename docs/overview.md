@@ -22,7 +22,7 @@
 - [Architecture Decision Records](3-design/adr/README.md) — Recorded architectural decisions
 - [Role Workflows Index](3-design/workflow/README.md) — Multi-role ecosystem overview
   - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen
-  - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 14-tool MCP agent workflow
+  - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 16-tool MCP agent workflow
   - [Platform Workflow (`--role platform`)](3-design/workflow/platform.md) — CI/CD orchestration, zero-trust toolchains, and failure diagnostics
   - [QA & Release Workflow (`--role qa`)](3-design/workflow/qa.md) — `100/100` VRC verification, lab headset rollout, and Horizon Store uploads
   - [Enterprise Workflow (`--role enterprise`)](3-design/workflow/enterprise.md) — Control plane governance, RBAC, and Meta HMS / MDM distribution

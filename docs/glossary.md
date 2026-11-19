@@ -24,7 +24,7 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 
 **LlmProviderSpi** - Outbound service-provider trait in `questforge-mcp` abstracting wire formats and OAuth/API-key authentication across `GeminiProvider`, `OpenAiProvider`, and `AnthropicProvider`.
 
-**MCP (Model Context Protocol)** - JSON-RPC 2.0 protocol over stdio implemented by `quest mcp`, exposing 14 deterministic QuestForge tools to AI coding agents and `quest agent`.
+**MCP (Model Context Protocol)** - JSON-RPC 2.0 protocol over stdio implemented by `quest mcp`, exposing 16 deterministic QuestForge tools to AI coding agents and `quest agent`.
 
 **MDM (Mobile Device Management)** - Enterprise fleet management systems (Meta HMS, ManageXR, ArborXR) that receive verified APKs via `quest ops hms-push`.
 
@@ -42,7 +42,9 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 
 **QF-SPEC / QF-SYNC / QF-VRC / QF-OXR / QF-PERF (Quest Check Gates)** - Five sub-second static source gates run by `quest check` prior to compiling an APK.
 
-**QV-001..QV-006 (Quest Verify Rules)** - Six static binary verification checks executed by `quest verify` on a compiled `.apk` to produce a `0–100` Meta VRC readiness scorecard.
+**QO-001..QO-013 (Quest Ops Capabilities)** - Device, release channel, tester, and fleet operations implemented by `quest ops` covering ADB discovery, registration, telemetry, deployment, rollback, logcat, screenshots, remote daemon sync, MDM push, 1:1 Meta Store integration, wireless ADB connection (`QO-011`), wireless pairing (`QO-012`), and release channel tester onboarding (`QO-013`).
+
+**QV-001..QV-010 (Quest Verify Rules)** - Ten static binary, manifest, and store readiness verification checks executed by `quest verify` on a compiled `.apk` to produce a `0–100` Meta VRC readiness scorecard (including `QV-009` private data backup review and `QV-010` store submission readiness).
 
 **RBAC (Role-Based Access Control)** - Access enforcement in `quest serve` (`questforge-server`) governing six roles: `administrator`, `platform_engineer`, `developer`, `qa_engineer`, `operations_engineer`, and `auditor`.
 

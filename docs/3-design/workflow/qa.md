@@ -10,8 +10,9 @@
 
 - [1. QA Release Readiness State Machine](#1-qa-release-readiness-state-machine)
 - [2. QA Fleet Validation & Horizon Store Promotion Flow](#2-qa-fleet-validation--horizon-store-promotion-flow)
-- [3. Autonomous QA Agent Remediation & Store Upload Sequence](#3-autonomous-qa-agent-remediation--store-upload-sequence)
-- [4. Multi-Tiered Input & Gesture Testing Surface](#4-multi-tiered-input--gesture-testing-surface)
+- [3. Autonomous QA Agent Remediation, Promotion & Store Flow](#3-autonomous-qa-agent-remediation-promotion--store-flow)
+- [4. Release Channel Promotion & Tester Onboarding](#4-release-channel-promotion--tester-onboarding)
+- [5. Multi-Tiered Input & Gesture Testing Surface](#5-multi-tiered-input--gesture-testing-surface)
 
 ---
 
@@ -49,7 +50,7 @@ flowchart LR
 
 ---
 
-## 3. Autonomous QA Agent Remediation & Store Upload Sequence
+## 3. Autonomous QA Agent Remediation, Promotion & Store Flow
 
 ```mermaid
 sequenceDiagram
@@ -62,7 +63,7 @@ sequenceDiagram
 
     QA->>Agent: "Verify dist/app.apk; if below 100/100 fix and rebuild, then upload to ALPHA"
     Agent->>MCP: tools/call {"name": "verify_release", "arguments": {"apk_path": "dist/app.apk"}}
-    MCP->>Core: ApkVerifier::verify (QV-001..QV-006)
+    MCP->>Core: ApkVerifier::verify (QV-001..QV-010)
     Core-->>MCP: Score < 100 (or 100/100)
     opt If manifest or sync drift detected
         Agent->>MCP: tools/call {"name": "sync_project", "arguments": {}}
@@ -71,17 +72,39 @@ sequenceDiagram
         Agent->>MCP: tools/call {"name": "verify_release", "arguments": {"apk_path": "dist/app-1.0.1.apk"}}
         Core-->>MCP: Score 100/100 (READY)
     end
-    Agent->>MCP: tools/call {"name": "ovr_store", "arguments": {"action": "upload-quest-build", "channel": "ALPHA"}}
+    Agent->>MCP: tools/call {"name": "upload_store", "arguments": {"channel": "ALPHA"}}
     MCP->>Core: Provision ovr-platform-util (if missing) & translate WSL paths if on WSL
     Core->>Store: ovr-platform-util upload-quest-build --apk ... --channel ALPHA
-    Store-->>Core: Upload complete
-    MCP-->>Agent: Store upload report + SHA-256
-    Agent-->>QA: Confirmed 100/100 VRC compliance & ALPHA channel upload
+    Store-->>Core: Upload complete (Build ID: 1440416305830062)
+    Core-->>MCP: Structured StoreUploadReceipt (build_id, test_results_url, invite_url)
+    MCP-->>Agent: Store upload report + persistent deployments.json
+    Agent-->>QA: Confirmed 100/100 VRC compliance, build ID & test results URL
 ```
 
 ---
 
-## 4. Multi-Tiered Input & Gesture Testing Surface
+## 4. Release Channel Promotion & Tester Onboarding
+
+QA teams can promote validated builds across channels and onboard internal/external testers:
+
+```powershell
+# Promote active ALPHA build to BETA autonomously
+quest agent --role qa --goal promote --channel BETA
+
+# Invite testers via Meta Horizon Graph API
+quest ops testers --channel ALPHA --action invite --email "qa-tester@example.com"
+
+# Generate direct developer portal onboarding link
+quest ops testers --channel ALPHA --action deep-link
+
+# Connect to cable-free lab headsets over Wi-Fi
+quest ops connect 192.168.1.50:5555
+quest ops pair 192.168.1.50:37123 --code 123456
+```
+
+---
+
+## 5. Multi-Tiered Input & Gesture Testing Surface
 
 Following [ADR-002](../adr/002_stratified_input_and_gesture_kinematics.md), QA teams and evaluators are never blocked by physical headset availability:
 

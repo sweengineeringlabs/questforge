@@ -2,14 +2,14 @@
 
 **Audience**: AI-native XR creators, IDE coding agent authors, and QuestForge MCP integrators
 
-**Target Persona:** AI-Native XR Creators and IDE coding assistants (Cursor, Claude Code, VS Code MCP clients, or `quest agent --role developer`) orchestrating all 14 QuestForge tools over JSON-RPC 2.0 (`quest mcp`).
+**Target Persona:** AI-Native XR Creators and IDE coding assistants (Cursor, Claude Code, VS Code MCP clients, or `quest agent --role developer`) orchestrating all 16 QuestForge tools over JSON-RPC 2.0 (`quest mcp`).
 
 ---
 
 ## Table of Contents
 
 - [1. AI Agent ReAct & MCP Sequence](#1-ai-agent-react--mcp-sequence)
-- [2. Role-Scoped MCP Tool Matrix (14 Tools)](#2-role-scoped-mcp-tool-matrix-14-tools)
+- [2. Role-Scoped MCP Tool Matrix (16 Tools)](#2-role-scoped-mcp-tool-matrix-16-tools)
 
 ---
 
@@ -35,7 +35,7 @@ sequenceDiagram
     MCP->>Core: CiOrchestrator::execute_build
     Core-->>MCP: APK path + SHA-256 + CycloneDX SBOM
     Agent->>MCP: tools/call {"name": "verify_release", "arguments": {"apk_path": "dist/app-1.0.0.apk"}}
-    MCP->>Core: ApkVerifier::verify (QV-001..QV-006)
+    MCP->>Core: ApkVerifier::verify (QV-001..QV-010)
     Core-->>MCP: Score 100/100 (READY)
     Agent->>MCP: tools/call {"name": "ovr_store", "arguments": {"action": "get-release-channel-data"}}
     MCP->>Core: FleetManager::execute_ovr_store
@@ -46,25 +46,25 @@ sequenceDiagram
 
 ---
 
-## 2. Role-Scoped MCP Tool Matrix (14 Tools)
+## 2. Role-Scoped MCP Tool Matrix (16 Tools)
 
-`quest agent --role <role>` filters and prioritizes the MCP tools exposed to the LLM (`AgentRole::preferred_tools`) so each role operates within its domain boundary, while `--role developer` exposes the full 14-tool surface:
+`quest agent --role <role>` filters and prioritizes the MCP tools exposed to the LLM (`AgentRole::preferred_tools`) so each role operates within its domain boundary, while `--role developer` exposes the full 16-tool surface:
 
 ```mermaid
 flowchart LR
     subgraph Roles["Agent Roles (--role)"]
         Studio["studio (8 preferred tools)"]
         Platform["platform (7 preferred tools)"]
-        QA["qa (11 preferred tools)"]
+        QA["qa (13 preferred tools)"]
         Enterprise["enterprise (7 preferred tools)"]
-        Developer["developer (All 14 tools)"]
+        Developer["developer (All 16 tools)"]
     end
 
-    subgraph Tools["14 QuestForge MCP Tools"]
+    subgraph Tools["16 QuestForge MCP Tools"]
         Authoring["init_project, sync_project, check_source"]
         Toolchain["setup_toolchain, doctor_check, search_docs"]
         Build["build_project, generate_pipeline, analyze_build_failure"]
-        Release["verify_release, fleet_discover, upload_store, ovr_store, publish_mdm"]
+        Release["verify_release, fleet_discover, fleet_connect, upload_store, ovr_store, manage_channel_testers, publish_mdm"]
     end
 
     Studio --> Authoring & Toolchain & Build & Release
@@ -81,12 +81,14 @@ flowchart LR
 | `check_source` | Runs sub-second static source gates (`QF-SPEC-001`, `QF-SYNC-001`, `QF-VRC-001`, `QF-OXR-001`, `QF-PERF-001`) |
 | `init_project` | Scaffolds a Unity, Unreal, or Native Rust OpenXR Quest project |
 | `build_project` | Executes `CiOrchestrator` to produce an APK, metadata, and CycloneDX SBOM |
-| `verify_release` | Runs `QV-001`–`QV-006` static VRC verification on an `.apk` |
+| `verify_release` | Runs `QV-001`–`QV-010` static VRC, security, and store asset verification on an `.apk` |
 | `generate_pipeline` | Emits GitHub Actions, Azure DevOps, or Jenkins pipeline definitions |
 | `analyze_build_failure` | Classifies Unity, Unreal, Gradle, NDK, IL2CPP, and signing errors |
 | `search_docs` | Searches QuestForge VRC, doctor, and configuration documentation |
 | `fleet_discover` | Discovers connected Quest headsets or emulators over `adb` |
+| `fleet_connect` | Connects or pairs with a Meta Quest headset over wireless ADB TCP/IP |
 | `publish_mdm` | Publishes verified APKs to Meta HMS (`graph.oculus.com`), ManageXR (`managexrapi.com`), or ArborXR (`api.xrdm.app`) |
 | `setup_toolchain` | Provisions and SHA-256-verifies `adb`, `cmdline-tools`, and `ovr-platform-util` (`quest setup`) |
 | `upload_store` | Uploads a signed `.apk` to a Meta Horizon Store release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`) |
 | `ovr_store` | 1:1 `ovr-platform-util` Horizon Store control (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`) |
+| `manage_channel_testers` | Invites, lists, or generates direct developer portal onboarding URLs for release channel testers |

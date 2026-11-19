@@ -64,22 +64,35 @@ quest doctor --fix --project-dir my-quest-app
 # 1. Build release binaries, package signed APK, and generate CycloneDX SBOM
 quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-version 1.0.0
 
-# 2. Run static APK compliance verification against Meta VRCs (QV-001..QV-006)
+# 2. Run static APK compliance verification against Meta VRCs (QV-001..QV-010)
 quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app --format html --out scorecard.html
 ```
 
 #### Uploading to Meta Horizon Store (Release Channels)
-QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
+QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0) and Meta Horizon Graph API:
 * **Credential Auto-Resolution:** The CLI automatically pulls the developer secret from `$env:QUEST_META_APP_SECRET`.
 * **App ID Validation & Hierarchy:** The CLI verifies whether `--app-id` (registered in [Meta Horizon Developers](https://developers.meta.com/horizon/manage/)) is provided via:
   1. CLI flag `--app-id <APP_ID>`
   2. Environment variable `$env:QUEST_META_APP_ID`
-  3. `mdm.app_id` in `quest_forge.yaml` (via `--project-dir`)
-  * **When not set:** The command immediately halts with: `missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)`.
+  3. `store.app_id` or `mdm.app_id` in `quest_forge.yaml` (via `--project-dir`)
+  * **When not set:** The command immediately halts with: `missing Meta Horizon App ID`.
   * **When set:** The build is validated and uploaded to the requested channel.
 * **Direct Channel Upload (`quest ops store-upload`):**
   ```pwsh
   quest ops store-upload --app-id <APP_ID> --apk my-quest-app/dist/my-quest-app-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"
+  ```
+* **Autonomous Channel Promotion (`quest agent --goal promote`):**
+  ```pwsh
+  # Autonomous agent auto-resolves active build and promotes track
+  quest agent --role qa --goal promote --channel BETA
+  ```
+* **Release Channel Tester Management (`quest ops testers`):**
+  ```pwsh
+  # Invite testers via Meta Graph API
+  quest ops testers --channel ALPHA --action invite --email "qa@example.com"
+
+  # Direct developer portal onboarding link
+  quest ops testers --channel ALPHA --action deep-link
   ```
 * **Integrated CI Build & Store Release (`quest ci`):**
   ```pwsh
@@ -93,10 +106,12 @@ QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
   # Promote build to production
   quest ops store --action set-release-channel-build --app-id <APP_ID> --channel PRODUCTION --build-id <BUILD_ID>
   ```
-* **Store Ingestion Requirements (VRC Compliance):**
+* **Store Ingestion Requirements (VRC & Security Compliance):**
   - **Manifest:** Declare `versionCode`, `versionName`, `installLocation="auto"`, `focusaware="true"`, `landscape` orientation, and OpenGL ES 3.2.
-  - **Uncompressed Resources:** `resources.arsc` must be stored uncompressed (`ZIP_STORED`) and 4-byte aligned via `zipalign`.
-  - **Native Loaders:** Bundle `libopenxr_loader.so` and `libovrplatformloader.so` in `lib/arm64-v8a/` for runtime recognition.
+  - **Security (QV-009):** Declare `android:allowBackup="false"` in `<application>` to prevent private data backup extraction.
+  - **Store Assets (QV-010):** Icon (`512x512`), hero banner (`2560x1440`), screenshots, and `https://` privacy policy URL.
+  - **Uncompressed Resources (QV-007):** `resources.arsc` must be stored uncompressed (`ZIP_STORED`) and 4-byte aligned via `zipalign`.
+  - **Native Loaders (QV-008):** Bundle `libopenxr_loader.so` and `libovrplatformloader.so` in `lib/arm64-v8a/` for runtime recognition.
   - **Legal Agreement (DDA):** Organization owner must accept Meta's Developer Distribution Agreement at least once prior to build ingestion.
 
 ### 4. Declarative Hand Gestures & Dual-Mode Interaction

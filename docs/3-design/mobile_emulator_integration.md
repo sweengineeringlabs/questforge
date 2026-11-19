@@ -32,7 +32,7 @@
 flowchart LR
     subgraph Layer1["1. Static & Binary Verification (Zero Hardware)"]
         Check["quest check (QF-SPEC / SYNC / VRC / OXR / PERF)"]
-        Verify["quest verify (QV-001..QV-006 APK + VRC + ARM64 + Signatures)"]
+        Verify["quest verify (QV-001..QV-010 APK + VRC + ARM64 + Signatures + Store Readiness)"]
     end
 
     subgraph Layer2["2. Headless AVD Harness (mobile-emulator)"]

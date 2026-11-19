@@ -51,9 +51,9 @@ flowchart TD
         Doctor["questforge-doctor (QD-001..QD-009 + XR_RUNTIME_JSON)"]
         Init["questforge-init (quest init, sync, check)"]
         CI["questforge-ci (Build, Rust APK, CycloneDX SBOM)"]
-        Verify["questforge-verify (QV-001..QV-006 Scorecards)"]
-        MCP["questforge-mcp (14 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
-        Ops["questforge-ops (ADB Fleet + Agent + Store + HMS/MDM Push)"]
+        Verify["questforge-verify (QV-001..QV-010 Scorecards)"]
+        MCP["questforge-mcp (16 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
+        Ops["questforge-ops (ADB Fleet + Wireless + Store + Testers + MDM Push)"]
         Server["questforge-server (REST API, JWT RBAC, PostgreSQL)"]
     end
 
@@ -169,7 +169,7 @@ sequenceDiagram
 
     User->>Agent: quest agent --role studio --provider gemini --auth --prompt "Check, fix, build, and verify orbit-pulse-vr"
     Agent->>MCP: tools/list (JSON-RPC 2.0)
-    MCP-->>Agent: 14 QuestForge MCP tool schemas (filtered by role)
+    MCP-->>Agent: 16 QuestForge MCP tool schemas (filtered by role)
     loop Until LLM returns final answer
         Agent->>LLM: Provider-native request (OpenAI/Gemini Chat Completions or Anthropic /v1/messages)
         LLM-->>Agent: tool_calls / tool_use (e.g. check_source, sync_project, build_project, verify_release)

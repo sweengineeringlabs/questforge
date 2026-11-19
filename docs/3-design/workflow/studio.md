@@ -87,7 +87,7 @@ sequenceDiagram
     CLI->>Engine: Runs headless ARM64 build
     Engine-->>CLI: Emits dist/my-quest-app-0.1.0.apk + build-metadata.json + sbom.cdx.json
     Studio->>CLI: quest verify dist/my-quest-app-0.1.0.apk
-    CLI-->>Studio: Audits QV-001..QV-006 -> Score 100/100 (READY)
+    CLI-->>Studio: Audits QV-001..QV-010 -> Score 100/100 (READY)
     Studio->>CLI: quest ops deploy local-dev dist/my-quest-app-0.1.0.apk
     CLI->>Quest: Installs APK via adb install -r
 ```

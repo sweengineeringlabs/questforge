@@ -234,6 +234,60 @@ quest auth --status
 quest agent --role qa --provider gemini --auth --prompt "Verify examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk and upload to ALPHA for app_id <APP_ID>"
 ```
 
+#### Method E: Autonomous Channel Promotion (`quest agent --goal promote`)
+Promote a verified build across release channels (`ALPHA` -> `BETA` -> `RC` -> `PRODUCTION`) without manual CLI steps:
+```pwsh
+# Promote the latest verified build to BETA
+quest agent --role qa --goal promote --channel BETA --app-id <APP_ID>
+
+# Promote to PRODUCTION with strict QV-001..QV-010 validation gate
+quest agent --role qa --goal promote --channel PRODUCTION --app-id <APP_ID>
+```
+The agent automatically inspects `.questforge/deployments.json` for the latest uploaded `build_id`, confirms release compliance against rules `QV-001` through `QV-010`, invokes `set-release-channel-build` via `ovr-platform-util`, and persists an immutable promotion receipt.
+
+### Wireless ADB Lab Fleet Operations (`QO-011`, `QO-012`)
+
+Manage untethered lab headsets (Quest 2, Quest Pro, Quest 3, Quest 3S) without USB cables:
+
+#### 1. Pairing Device (Android 11+ Pairing Code)
+On the Quest headset, enable **Settings > System > Developer > Wireless Debugging** and view the pairing IP, port, and 6-digit code:
+```pwsh
+quest ops pair 192.168.1.100:37099 --code 847291
+```
+
+#### 2. Connecting to Wireless ADB
+Connect the workstation or CI runner to the headset's wireless ADB port (default `5555` or dynamic port):
+```pwsh
+quest ops connect 192.168.1.100:5555
+```
+
+#### 3. Verify Discovery & Remote Management
+Verify the wireless headset appears in the device inventory:
+```pwsh
+quest ops devices
+```
+Once connected, all standard fleet operations (`quest ops deploy`, `quest ops logcat`, `quest ops screenshot`) work transparently over the wireless transport.
+
+### Release Channel Tester Management (`QO-013`)
+
+Manage user and QA access to Meta Horizon Store release channels (`ALPHA`, `BETA`, `RC`, `PRODUCTION`):
+
+#### 1. Invite a Tester by Email
+```pwsh
+quest ops testers --app-id <APP_ID> --channel ALPHA --action invite --email tester@studio.internal
+```
+
+#### 2. List Active Testers on Channel
+```pwsh
+quest ops testers --app-id <APP_ID> --channel ALPHA --action list
+```
+
+#### 3. Generate Tester Deep-Link Invite URL
+Generate a direct Meta Horizon developer portal deep-link for automated tester onboarding notifications:
+```pwsh
+quest ops testers --app-id <APP_ID> --channel BETA --action deep-link
+```
+
 #### Linux & WSL Subsystem Interop Details
 Meta does not publish a native Linux `ovr-platform-util` binary. When running the Linux `quest` binary inside **WSL (Windows Subsystem for Linux)**:
 - **Auto-detection:** `quest` detects WSL automatically via `WSL_DISTRO_NAME`, `WSL_INTEROP`, or `/proc/version`.
@@ -259,6 +313,9 @@ Meta does not publish a native Linux `ovr-platform-util` binary. When running th
 | `The resources.arsc file is compressed in this APK, which is not allowed` | Android 11+ and Meta require uncompressed resource tables | Package `resources.arsc` with compression level 0 (`ZIP_STORED`) and align via `zipalign -f -v 4 <in> <out>`. |
 | `The APK has no "versionName" defined in the manifest` | Meta VRC requires explicit version strings | Declare `android:versionCode="<INT>"` and `android:versionName="<STRING>"` in the root `<manifest>` tag of `AndroidManifest.xml`. |
 | `We cannot read or process the manifest contained in the provided APK` | Manifest packaged as plaintext UTF-8 XML rather than binary AXML | Compile manifest using `aapt2 link -I <android.jar> --manifest AndroidManifest.xml --version-code <N> --version-name <STR> -o base.apk`. |
+| `Application allows backup of private data (QV-009)` | `android:allowBackup="true"` or omitted | Set `android:allowBackup="false"` in `AndroidManifest.xml` under `<application>` to enforce Zero-Trust privacy. |
+| `Store submission readiness failed (QV-010)` | Missing store assets or metadata | Configure `store:` block in `quest_forge.yaml` with valid 512x512 icon, 2560x1440 hero banner, HTTPS privacy/terms/support URLs, and IARC certificate. |
+| `Wireless ADB connection refused or failed` | Headset and workstation on different subnets or wireless debugging timed out | Ensure headset and host are on the same Wi-Fi; enable Wireless Debugging in Quest settings; re-pair with `quest ops pair <IP:PORT> --code <CODE>`. |
 
 ---
 

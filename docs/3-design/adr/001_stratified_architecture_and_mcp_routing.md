@@ -22,7 +22,7 @@ We needed an architecture that:
 ## Decision
 
 1. **Stratified Workspace Architecture:** Split the workspace into one domain contract crate (`questforge-api`, `package_kind = api`), nine domain library crates (`questforge-*`, `package_kind = lib`) with private `error/` and `vo/` modules re-exported at `lib.rs`, and one thin CLI binary (`apps/quest`, `package_kind = bin`).
-2. **Strict MCP JSON-RPC 2.0 Agent Boundary:** Route all autonomous and LLM ReAct agent actions (`quest agent --role`) exclusively through `quest mcp` (`14` tools) over JSON-RPC 2.0, with LLM wire protocols isolated behind `LlmProviderSpi`.
+2. **Strict MCP JSON-RPC 2.0 Agent Boundary:** Route all autonomous and LLM ReAct agent actions (`quest agent --role`) exclusively through `quest mcp` (`16` tools) over JSON-RPC 2.0, with LLM wire protocols isolated behind `LlmProviderSpi`.
 3. **Linux via WSL Hybrid Provisioning & Path Translation:** Detect WSL (`PlatformTarget { os: "wsl", .. }`), provision native Linux `adb`/`cmdline-tools` alongside Windows `ovr-platform-util.exe` (`chmod 0755`), share `/mnt/c/Users/*/.questforge/` cache when present, and translate file arguments with `wslpath -w`.
 
 ## Comparison
@@ -30,7 +30,7 @@ We needed an architecture that:
 | Aspect | Monolithic CLI + Direct Shell Calls | Stratified Crates + MCP JSON-RPC + WSL Interop (Chosen) |
 |---|---|---|
 | Layer isolation | Weak; internal types leak across modules | Enforced by crate boundaries and `compile_fail` doctests |
-| AI agent safety | Unstructured shell execution | 14 typed JSON-RPC 2.0 MCP tools scoped by `--role` |
+| AI agent safety | Unstructured shell execution | 16 typed JSON-RPC 2.0 MCP tools scoped by `--role` |
 | Linux / WSL Store uploads | Blocked (no native Linux `ovr-platform-util`) | Seamless WSL interop via `ovr-platform-util.exe` + `wslpath -w` |
 
 ## Rationale
