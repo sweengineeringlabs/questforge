@@ -717,12 +717,7 @@ fn generate_android_manifest_xml(cfg: &QuestforgeConfig) -> String {
         .targets
         .devices
         .iter()
-        .map(|d| match d {
-            QuestDevice::Quest2 => "quest2",
-            QuestDevice::Quest3 => "quest3",
-            QuestDevice::Quest3s => "quest3s",
-            QuestDevice::QuestPro => "questpro",
-        })
+        .map(QuestDevice::as_tag)
         .collect::<Vec<_>>()
         .join("|");
 

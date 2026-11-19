@@ -296,3 +296,38 @@ mdm:
         ));
     }
 }
+
+#[test]
+fn test_targets_future_and_custom_devices_happy() {
+    let yaml = r#"
+version: "1"
+project:
+  name: future-app
+  package_id: com.acme.future
+  engine: rust
+targets:
+  devices:
+    - quest2
+    - quest3
+    - quest3s
+    - questpro
+    - quest4
+    - mona
+"#;
+    let Ok(cfg) = QuestforgeConfig::from_yaml_str(yaml) else {
+        panic!("valid yaml expected");
+    };
+    assert_eq!(
+        cfg.targets.devices,
+        vec![
+            QuestDevice::Quest2,
+            QuestDevice::Quest3,
+            QuestDevice::Quest3s,
+            QuestDevice::QuestPro,
+            QuestDevice::Custom("quest4".to_string()),
+            QuestDevice::Custom("mona".to_string()),
+        ]
+    );
+    assert_eq!(cfg.targets.devices[4].as_tag(), "quest4");
+    assert_eq!(cfg.targets.devices[5].as_tag(), "mona");
+}

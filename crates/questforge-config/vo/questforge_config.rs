@@ -106,7 +106,7 @@ impl Default for TargetsConfig {
 }
 
 /// Supported Meta Quest hardware targets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QuestDevice {
     /// Meta Quest 2.
@@ -117,6 +117,23 @@ pub enum QuestDevice {
     Quest3s,
     /// Meta Quest Pro.
     QuestPro,
+    /// Future or custom Meta Horizon OS device target (e.g. `quest4`).
+    #[serde(untagged)]
+    Custom(String),
+}
+
+impl QuestDevice {
+    /// Canonical device tag used in `com.oculus.supportedDevices`.
+    #[must_use]
+    pub fn as_tag(&self) -> &str {
+        match self {
+            Self::Quest2 => "quest2",
+            Self::Quest3 => "quest3",
+            Self::Quest3s => "quest3s",
+            Self::QuestPro => "questpro",
+            Self::Custom(s) => s.as_str(),
+        }
+    }
 }
 
 /// Required local and CI toolchain versions.
