@@ -254,6 +254,11 @@ Meta does not publish a native Linux `ovr-platform-util` binary. When running th
 | `404` on `POST /api/reports` | Write endpoint for verification scorecards is `POST /api/verify` | Post verification results to `POST /api/verify`; read via `GET /api/reports` |
 | `native TypeScript is missing` in `mweb check` | Dependencies not installed in `web/` | Run `bun install` inside `web/` |
 | `MissingChecksum` in `quest setup` | Zero-trust policy requires SHA-256 | Provide `--adb-sha256` / `--ovr-sha256` (or `quest_forge.yaml` `*_sha256` fields) |
+| `OCULUS_PLATFORM__DDA_IS_NOT_ACCEPTED` | Organization admin has not agreed to Meta's legal terms | Organization admin must visit `https://developers.meta.com/vr/manage/organizations/<ORG_ID>/legal-documents/` and click **Agree** on the Developer Distribution Agreement (DDA). |
+| `Horizon SDK not found or older than 1.0.` | Meta static analysis requires Khronos OpenXR loader and Meta Horizon Platform loader | Bundle `libopenxr_loader.so` (Khronos) and `libovrplatformloader.so` (from Maven `com.meta.horizon.platform.ovr:android-platform-sdk`) in `lib/arm64-v8a/`. |
+| `The resources.arsc file is compressed in this APK, which is not allowed` | Android 11+ and Meta require uncompressed resource tables | Package `resources.arsc` with compression level 0 (`ZIP_STORED`) and align via `zipalign -f -v 4 <in> <out>`. |
+| `The APK has no "versionName" defined in the manifest` | Meta VRC requires explicit version strings | Declare `android:versionCode="<INT>"` and `android:versionName="<STRING>"` in the root `<manifest>` tag of `AndroidManifest.xml`. |
+| `We cannot read or process the manifest contained in the provided APK` | Manifest packaged as plaintext UTF-8 XML rather than binary AXML | Compile manifest using `aapt2 link -I <android.jar> --manifest AndroidManifest.xml --version-code <N> --version-name <STR> -o base.apk`. |
 
 ---
 

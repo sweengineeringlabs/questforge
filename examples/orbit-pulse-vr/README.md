@@ -12,6 +12,8 @@
 * **Declarative Interaction (`specs/orbit_arena_xr.yaml`):** Declares grabbable objects, poke buttons, spatial anchors, and the `wave_gesture`.
 * **Zero-Hardware Evaluation:** Runs as a native 6DoF spatial VR game on Meta Quest, or as an interactive application on standard Android phones and headless emulators.
 * **100/100 VRC Verification:** Fully compliant with Meta Horizon Store policies (64-bit ARM64, v2+ signing, non-debuggable, clean permissions).
+* **Live Meta Horizon Store Release:** Uploaded to **ALPHA** channel (Build ID `1440281285843564`, App ID `1439257382612621`).
+* **GitHub Public Release:** Downloadable at [GitHub Releases v0.1.2](https://github.com/sweengineeringlabs/questforge/releases/tag/v0.1.2).
 
 ---
 
@@ -56,4 +58,7 @@ quest ci --project-dir . --output-dir dist --release-version 1.0.0
 
 # 5. Verify Meta Horizon Store compliance (asserts 100/100 score)
 quest verify dist/orbit-pulse-vr-1.0.0.apk --project-dir .
+
+# 6. Upload directly to Meta Horizon Store Alpha channel
+quest ops store-upload --app-id 1439257382612621 --apk dist/orbit-pulse-vr-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"
 ```

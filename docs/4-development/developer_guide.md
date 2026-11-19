@@ -93,6 +93,11 @@ QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
   # Promote build to production
   quest ops store --action set-release-channel-build --app-id <APP_ID> --channel PRODUCTION --build-id <BUILD_ID>
   ```
+* **Store Ingestion Requirements (VRC Compliance):**
+  - **Manifest:** Declare `versionCode`, `versionName`, `installLocation="auto"`, `focusaware="true"`, `landscape` orientation, and OpenGL ES 3.2.
+  - **Uncompressed Resources:** `resources.arsc` must be stored uncompressed (`ZIP_STORED`) and 4-byte aligned via `zipalign`.
+  - **Native Loaders:** Bundle `libopenxr_loader.so` and `libovrplatformloader.so` in `lib/arm64-v8a/` for runtime recognition.
+  - **Legal Agreement (DDA):** Organization owner must accept Meta's Developer Distribution Agreement at least once prior to build ingestion.
 
 ### 4. Declarative Hand Gestures & Dual-Mode Interaction
 
