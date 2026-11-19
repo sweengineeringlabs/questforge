@@ -244,12 +244,10 @@ fn test_provision_wsl_ovr_raw_exe_caches_under_wsl_platform_happy() {
         sha256: Some(sha),
     }];
 
-    let res = ToolchainProvisioner::provision_with_fetcher(
-        platform,
-        cache_dir.path(),
-        &specs,
-        |_| Ok(exe_bytes.clone()),
-    );
+    let res =
+        ToolchainProvisioner::provision_with_fetcher(platform, cache_dir.path(), &specs, |_| {
+            Ok(exe_bytes.clone())
+        });
     assert!(matches!(
         res,
         Ok(ref report)
