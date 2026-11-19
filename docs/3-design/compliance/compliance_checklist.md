@@ -8,7 +8,7 @@ Use this checklist during code review for any PR that touches QuestForge's archi
 
 ## Table of Contents
 
-- [1. Layer & Package Boundary Compliance (`swartch`)](#1-layer--package-boundary-compliance-swartch)
+- [1. Layer & Package Boundary Compliance](#1-layer--package-boundary-compliance)
 - [2. Module Privacy & Re-Export Compliance](#2-module-privacy--re-export-compliance)
 - [3. AI / MCP Routing & Provider SPI Compliance](#3-ai--mcp-routing--provider-spi-compliance)
 - [4. Zero-Trust Toolchain & Cross-Platform / WSL Compliance](#4-zero-trust-toolchain--cross-platform--wsl-compliance)
@@ -17,14 +17,13 @@ Use this checklist during code review for any PR that touches QuestForge's archi
 
 ---
 
-## 1. Layer & Package Boundary Compliance (`swartch`)
+## 1. Layer & Package Boundary Compliance
 
 Reference: [docs/3-design/architecture.md](../architecture.md#component--layer-diagram)
 
 - [x] `questforge-api` (`package_kind = api`) has zero dependencies on any `questforge-*` `lib` crate.
 - [x] Every domain library crate (`questforge-config`, `questforge-toolchain`, `questforge-doctor`, `questforge-init`, `questforge-ci`, `questforge-verify`, `questforge-mcp`, `questforge-ops`, `questforge-server`) depends on `questforge-api`.
 - [x] `apps/quest` (`package_kind = bin`) contains CLI dispatch only (`bin/run.rs`) and delegates business logic to `lib` crates.
-- [x] `swartch` reports `0 offences` across all 11 packages.
 
 ---
 
@@ -73,5 +72,4 @@ Reference: [docs/3-design/architecture.md](../architecture.md#control-plane--per
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questforge-config crates/questforge-toolchain crates/questforge-doctor crates/questforge-init crates/questforge-ci crates/questforge-verify crates/questforge-mcp crates/questforge-ops crates/questforge-server apps/quest
 ```

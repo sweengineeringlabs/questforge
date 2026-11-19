@@ -10,7 +10,7 @@ Index of Architecture Decision Records for **QuestForge**, following `../templat
 
 | ADR | Title | Status | Date |
 |---|---|---|---|
-| [ADR-001](001-swartch-architecture-and-mcp-routing.md) | `swartch` Architecture 4.0 Workspace, Role-Based MCP Routing, and WSL Store Interop | Accepted | 2026-11-18 |
+| [ADR-001](001-stratified-architecture-and-mcp-routing.md) | Stratified Workspace Architecture, Role-Based MCP Routing, and WSL Store Interop | Accepted | 2026-11-18 |
 
 ---
 

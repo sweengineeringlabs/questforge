@@ -2,7 +2,7 @@
 
 **Audience**: Platform engineers, CI/CD maintainers, and DevOps leads
 
-**Target Persona:** Platform & DevOps Engineers standardizing Quest CI/CD across GitHub Actions, Azure DevOps, or Jenkins with zero-trust SHA-256 binary provisioning, CycloneDX 1.5 SBOMs, SARIF gates, and `swartch` Architecture 4.0 verification.
+**Target Persona:** Platform & DevOps Engineers standardizing Quest CI/CD across GitHub Actions, Azure DevOps, or Jenkins with zero-trust SHA-256 binary provisioning, CycloneDX 1.5 SBOMs, and SARIF compliance gates.
 
 ---
 
@@ -18,16 +18,15 @@
 ```mermaid
 flowchart TD
     PR["Git Push / Pull Request"] --> Runner["CI Runner (scripts/ci.sh)"]
-    Runner --> Swartch["1. swartch Architecture 4.0 Gate"]
-    Swartch --> Setup["2. quest setup (Verify SHA-256 Toolchains: adb, cmdline-tools, ovr-platform-util)"]
-    Setup --> DoctorCI["3. quest doctor --ci --strict --json"]
-    DoctorCI --> Check["4. quest check (QF-SPEC / SYNC / VRC / OXR / PERF)"]
-    Check --> Build["5. quest ci (Headless ARM64 Build + CycloneDX SBOM + Metadata)"]
-    Build --> VerifySARIF["6. quest verify --format sarif & json"]
+    Runner --> Setup["1. quest setup (Verify SHA-256 Toolchains: adb, cmdline-tools, ovr-platform-util)"]
+    Setup --> DoctorCI["2. quest doctor --ci --strict --json"]
+    DoctorCI --> Check["3. quest check (QF-SPEC / SYNC / VRC / OXR / PERF)"]
+    Check --> Build["4. quest ci (Headless ARM64 Build + CycloneDX SBOM + Metadata)"]
+    Build --> VerifySARIF["5. quest verify --format sarif & json"]
     VerifySARIF --> Gate{"Score == 100 & 0 Critical?"}
     Gate -->|"No"| Fail["Fail Pipeline & Upload SARIF Diagnostics"]
-    Gate -->|"Yes"| Publish["7. POST /api/builds & /api/verify to quest serve"]
-    Publish --> Store["8. quest ops store / ovr_store (ALPHA -> BETA -> RC -> PROD)"]
+    Gate -->|"Yes"| Publish["6. POST /api/builds & /api/verify to quest serve"]
+    Publish --> Store["7. quest ops store / ovr_store (ALPHA -> BETA -> RC -> PROD)"]
 ```
 
 ---

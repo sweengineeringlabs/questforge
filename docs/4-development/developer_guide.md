@@ -15,7 +15,7 @@ Guide for **XR Application Developers** building Meta Quest apps and **Platform 
   - [4. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)](#4-showcase-app-examplesorbit-pulse-vr--enterprise-mdm-quest_forgeyaml-mdm)
   - [5. AI Agents & Provider Auth (`quest auth` & `quest agent`)](#5-ai-agents--provider-auth-quest-auth--quest-agent)
 - [Part 2: QuestForge Contributors](#part-2-questforge-contributors)
-  - [Workspace Structure (`swartch` Architecture 4.0)](#workspace-structure-swartch-architecture-40)
+  - [Workspace Structure](#workspace-structure)
   - [Key Conventions](#key-conventions)
   - [See Also](#see-also)
 
@@ -86,7 +86,7 @@ If OAuth is unavailable or rejected (`401`/`403`), `quest auth` and `quest agent
 
 ## Part 2: QuestForge Contributors
 
-### Workspace Structure (`swartch` Architecture 4.0)
+### Workspace Structure
 ```text
 metaquest/
 ├── apps/quest/              # CLI binary (bin/run.rs)
@@ -105,7 +105,6 @@ metaquest/
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets -- -D warnings
   cargo test --workspace
-  swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questforge-config crates/questforge-toolchain crates/questforge-doctor crates/questforge-init crates/questforge-ci crates/questforge-verify crates/questforge-mcp crates/questforge-ops crates/questforge-server apps/quest
   ```
 
 ### See Also

@@ -71,7 +71,7 @@ accumulator_finish     = "finish"
 # The constructor that can reject its input, and the scenario of the test that passes it an input it rejects.
 fallible_constructor   = "try_new"
 rejection_scenario     = "error"
-# The form a service name takes in a type name: `ion` (`Remediation`) or `tor` (`Remediator`). A consumer chooses one, once, and every service it has uses it. swartch defaults to `tor`.
+# The form a service name takes in a type name: `ion` (`Remediation`) or `tor` (`Remediator`). A consumer chooses one, once, and every service it has uses it. Defaults to `tor`.
 service_name_form      = "tor"
 
 # The targets the command line can narrow an audit to. Each key is a role and each value the flag words that name it

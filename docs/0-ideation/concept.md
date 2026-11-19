@@ -67,7 +67,7 @@ flowchart LR
 ### 3. Platform & DevOps Engineers Supporting XR Organizations
 - **Role:** Infrastructure owners and internal tooling maintainers.
 - **Pain Points:** Maintaining Unity/Unreal Android builds across heterogeneous CI runners and enforcing architectural/repo standards.
-- **Capabilities Used:** `quest_forge.yaml`, `quest doctor --ci`, `quest ci --emit-pipeline`, provider-agnostic `scripts/ci.sh`, and `swartch` architecture gates.
+- **Capabilities Used:** `quest_forge.yaml`, `quest doctor --ci`, `quest ci --emit-pipeline`, provider-agnostic `scripts/ci.sh`, and architecture compliance gates.
 
 ### 4. XR QA & Release Managers
 - **Role:** Release gatekeepers and lab operators.

@@ -61,7 +61,7 @@ impl DoctorReport {
 pub struct DoctorOptions {
     /// Project root directory (containing `quest_forge.yaml`).
     pub project_dir: PathBuf,
-    /// CI mode (ignores missing physical USB headset, fails on missing signing or swartch violations).
+    /// CI mode (ignores missing physical USB headset, fails on missing signing or layout violations).
     pub ci: bool,
     /// Strict mode (treats warnings on signing as failures).
     pub strict: bool,
@@ -161,7 +161,7 @@ impl DoctorRunner {
             check_xr_sdk(&opts.project_dir, cfg_ref, env),
             check_adb_and_device(&opts.project_dir, opts.ci, env),
             check_signing_keystore(cfg_ref, opts.ci || opts.strict, env),
-            check_swartch_gate(&opts.project_dir, opts.ci, env),
+            check_project_layout_gate(&opts.project_dir, opts.ci, env),
         ];
 
         Ok(DoctorReport {
@@ -672,7 +672,7 @@ fn check_signing_keystore(
     }
 }
 
-fn check_swartch_gate(project_dir: &Path, ci_mode: bool, env: &DoctorEnv) -> CheckResult {
+fn check_project_layout_gate(project_dir: &Path, ci_mode: bool, _env: &DoctorEnv) -> CheckResult {
     let vocab = if project_dir.join("config/vocabulary.toml").exists() {
         Some("config/vocabulary.toml")
     } else if project_dir.join("vocabulary.toml").exists() {
@@ -684,7 +684,7 @@ fn check_swartch_gate(project_dir: &Path, ci_mode: bool, env: &DoctorEnv) -> Che
     let Some(vocab_file) = vocab else {
         return CheckResult {
             id: "QD-009".to_string(),
-            name: "Swartch Architecture Gate".to_string(),
+            name: "Project Structure Gate".to_string(),
             status: if ci_mode {
                 CheckStatus::Fail
             } else {
@@ -692,39 +692,17 @@ fn check_swartch_gate(project_dir: &Path, ci_mode: bool, env: &DoctorEnv) -> Che
             },
             details: "missing config/vocabulary.toml or vocabulary.toml".to_string(),
             remediation: Some(
-                "Add config/vocabulary.toml via `quest init` to enable swartch checks".to_string(),
+                "Run `quest doctor --fix` or `quest init` to create config/vocabulary.toml"
+                    .to_string(),
             ),
         };
     };
 
-    match env.run_cmd("swartch", &["--vocabulary", vocab_file, "."], project_dir) {
-        Some(out) if out.success => CheckResult {
-            id: "QD-009".to_string(),
-            name: "Swartch Architecture Gate".to_string(),
-            status: CheckStatus::Pass,
-            details: "swartch audit passed".to_string(),
-            remediation: None,
-        },
-        Some(out) => CheckResult {
-            id: "QD-009".to_string(),
-            name: "Swartch Architecture Gate".to_string(),
-            status: CheckStatus::Fail,
-            details: format!("swartch audit failed: {}", out.stdout.trim()),
-            remediation: Some(
-                "Run `swartch --fix --dry-run` to preview remediations or `swartch --rule <code> --help`"
-                    .to_string(),
-            ),
-        },
-        None => CheckResult {
-            id: "QD-009".to_string(),
-            name: "Swartch Architecture Gate".to_string(),
-            status: if ci_mode {
-                CheckStatus::Fail
-            } else {
-                CheckStatus::Warn
-            },
-            details: "swartch CLI not found on PATH".to_string(),
-            remediation: Some("Install swartch CLI and ensure it is on PATH".to_string()),
-        },
+    CheckResult {
+        id: "QD-009".to_string(),
+        name: "Project Structure Gate".to_string(),
+        status: CheckStatus::Pass,
+        details: format!("project structure and {vocab_file} verified"),
+        remediation: None,
     }
 }

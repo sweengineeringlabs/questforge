@@ -34,7 +34,7 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 
 **ovr-platform-util** - Official Meta Horizon Store command-line utility provisioned by `quest setup --ovr-version latest` and orchestrated 1:1 by `quest ops store` and the `ovr_store` MCP tool.
 
-**QD-001..QD-009 (Quest Doctor Checks)** - Nine workstation and CI diagnostic checks executed by `quest doctor` covering `quest_forge.yaml`, engine, JDK, Android SDK, NDK, OpenXR/Meta XR SDK, ADB/headset, keystore signing, and `swartch`.
+**QD-001..QD-009 (Quest Doctor Checks)** - Nine workstation and CI diagnostic checks executed by `quest doctor` covering `quest_forge.yaml`, engine, JDK, Android SDK, NDK, OpenXR/Meta XR SDK, ADB/headset, keystore signing, and project structure/vocabulary compliance.
 
 **QF-SPEC / QF-SYNC / QF-VRC / QF-OXR / QF-PERF (Quest Check Gates)** - Five sub-second static source gates run by `quest check` prior to compiling an APK.
 
@@ -43,8 +43,6 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 **RBAC (Role-Based Access Control)** - Access enforcement in `quest serve` (`questforge-server`) governing six roles: `administrator`, `platform_engineer`, `developer`, `qa_engineer`, `operations_engineer`, and `auditor`.
 
 **SARIF (Static Analysis Results Interchange Format)** - OASIS standard JSON report format (`--format sarif`) emitted by `quest verify` for CI/CD security tabs.
-
-**swartch** - Architecture 4.0 linter and vocabulary auditor enforcing layer dependencies, module privacy, and naming across the QuestForge Rust workspace.
 
 **VRC (Virtual Reality Checks)** - Meta's technical, performance, manifest, and security compliance requirements for publishing on the Meta Horizon Store.
 

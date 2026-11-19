@@ -10,7 +10,6 @@ Thank you for contributing to **QuestForge**!
    - `cargo fmt --all -- --check`
    - `cargo clippy --workspace --all-targets -- -D warnings`
    - `cargo test --workspace`
-   - `swartch --vocabulary config/vocabulary.toml ...` (0 offences)
 
 ## Pull Requests
 

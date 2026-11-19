@@ -2,11 +2,11 @@
 
 **Audience**: Platform engineers, CLI contributors, and technical leads
 
-> **TLDR**: Phase 1 MVP specification for QuestForge (`quest setup`, `quest doctor`, `quest init`, and `quest_forge.yaml`), establishing zero-trust toolchain provisioning, workstation diagnostics (`QD-001`..`QD-009`), and standardized repository scaffolding under `swartch` Architecture 4.0.
+> **TLDR**: Phase 1 MVP specification for QuestForge (`quest setup`, `quest doctor`, `quest init`, and `quest_forge.yaml`), establishing zero-trust toolchain provisioning, workstation diagnostics (`QD-001`..`QD-009`), and standardized repository scaffolding.
 
 **Version:** 1.0 (Implemented)  
 **Scope:** Phase 1 Foundation (`setup-metavr` / `quest setup`, `quest-doctor` / `quest doctor`, `quest-init` / `quest init`, and shared `quest_forge.yaml`)  
-**Toolchain:** Rust `1.100.0`, Bun `1.4.2` (latest stable), `swartch` CLI (Architecture 4.0 auditor, scaffolder, and remediator)  
+**Toolchain:** Rust `1.100.0`, Bun `1.4.2` (latest stable)  
 **Status:** Implemented in `quest` v0.1
 
 ---
@@ -45,8 +45,8 @@ Instead of maintaining three separate Rust release pipelines in Phase 1, ship:
    - `quest init` (also aliasable as `quest-init`)
    - `quest doctor` (also aliasable as `quest-doctor`)
    - `quest setup` (local wrapper around `setup-metavr` logic)
-2. **Provider-Agnostic CI (`swartch scaffold --scripts`):**
-   - Generate `scripts/ci.sh` and lifecycle scripts via `swartch scaffold --scripts` so CI does not rely on GitHub Actions.
+2. **Provider-Agnostic CI (`scripts/ci.sh`):**
+   - Generate `scripts/ci.sh` and lifecycle scripts so CI does not rely on GitHub Actions.
    - `setup-metavr` (or `setup-quest`) remains an optional thin wrapper for teams using GitHub Actions.
 
 ---
@@ -153,7 +153,7 @@ Detect missing, misconfigured, or version-mismatched dependencies *before* a dev
 | `QD-006` | **Meta XR SDK & OpenXR** | Parses `Packages/manifest.json` (Unity) for `com.meta.xr.sdk.all` / `com.unity.xr.openxr` | **Fail** if missing; **Warn** if version < `quest_forge.yaml` | Print UPM package name and expected version |
 | `QD-007` | **ADB & Connected Headset** | Runs `adb version` and `adb devices` | **Warn** if no device connected (not fatal in CI); **Fail** if `adb` missing or device `unauthorized` | Prompt to enable Developer Mode & accept RSA USB debugging dialog on headset |
 | `QD-008` | **Signing Keystore** | Checks env var / path from `quest_forge.yaml` (`keytool -list`) | **Warn** in local dev; **Fail** with `--strict` / `--ci` flag | Explain how to generate/configure release keystore |
-| `QD-009` | **Swartch Architecture Gate** | Checks `swartch` availability, `config/vocabulary.toml` (or `vocabulary.toml`), and runs `swartch <crate-directory>` against Architecture 4.0 invariant rules | **Fail** on rule violations (`[<ERROR_CODE>] <rule_name>`); **Warn** if `swartch` is missing locally (**Fail** in `--ci`) | Run `swartch --fix --dry-run` to preview remediations or `swartch --rule <code > --help` for rule contract |
+| `QD-009` | **Project Structure & Vocabulary Gate** | Checks `config/vocabulary.toml` (or `vocabulary.toml`) and project layout invariants | **Fail** on rule violations; **Warn** if missing locally (**Fail** in `--ci`) | Run `quest doctor --fix` to restore project layout and vocabulary config |
 
 ### CLI & Output Modes
 - `quest doctor` — Human-readable checklist (`✓` / `!` / `✗`) with remediation commands.
@@ -177,15 +177,15 @@ quest init my-quest-app --engine unity --unity-version 2022.3.42f1 --package-id 
 my-quest-app/
 ├── quest_forge.yaml
 ├── config/
-│   └── vocabulary.toml         # Swartch Architecture 4.0 vocabulary file
-├── scripts/                    # Environment & CI lifecycle scripts (`ci.sh` via `swartch scaffold --scripts`)
-├── configs/                    # App & environment configs (`swartch scaffold --configs`)
+│   └── vocabulary.toml         # Project vocabulary configuration
+├── scripts/                    # Environment & CI lifecycle scripts (`ci.sh`)
+├── configs/                    # App & environment configs
 ├── .gitignore                  # Tuned for Unity (Library/, Temp/, Logs/) or Unreal (Intermediate/, Saved/, Binaries/)
 ├── .gitattributes              # Git LFS rules for .fbx, .png, .wav, .apk, .asset
 ├── .github/
 │   ├── CODEOWNERS
 │   └── workflows/
-│       ├── pr-validate.yml     # Runs setup-metavr + swartch . + quest doctor --ci
+│       ├── pr-validate.yml     # Runs setup-metavr + quest doctor --ci
 │       └── build-apk.yml       # Starter Quest build workflow
 ├── docs/
 │   └── onboarding.md           # Instructions referencing `quest doctor`

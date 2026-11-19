@@ -1,4 +1,4 @@
-# ADR-001: `swartch` Architecture 4.0 Workspace, Role-Based MCP Routing, and WSL Store Interop
+# ADR-001: Stratified Workspace Architecture, Role-Based MCP Routing, and WSL Store Interop
 
 **Audience**: Architects, technical leads, and QuestForge contributors
 
@@ -21,15 +21,15 @@ We needed an architecture that:
 
 ## Decision
 
-1. **`swartch` Architecture 4.0 Stratification:** Split the workspace into one domain contract crate (`questforge-api`, `package_kind = api`), nine domain library crates (`questforge-*`, `package_kind = lib`) with private `error/` and `vo/` modules re-exported at `lib.rs`, and one thin CLI binary (`apps/quest`, `package_kind = bin`).
+1. **Stratified Workspace Architecture:** Split the workspace into one domain contract crate (`questforge-api`, `package_kind = api`), nine domain library crates (`questforge-*`, `package_kind = lib`) with private `error/` and `vo/` modules re-exported at `lib.rs`, and one thin CLI binary (`apps/quest`, `package_kind = bin`).
 2. **Strict MCP JSON-RPC 2.0 Agent Boundary:** Route all autonomous and LLM ReAct agent actions (`quest agent --role`) exclusively through `quest mcp` (`14` tools) over JSON-RPC 2.0, with LLM wire protocols isolated behind `LlmProviderSpi`.
 3. **Linux via WSL Hybrid Provisioning & Path Translation:** Detect WSL (`PlatformTarget { os: "wsl", .. }`), provision native Linux `adb`/`cmdline-tools` alongside Windows `ovr-platform-util.exe` (`chmod 0755`), share `/mnt/c/Users/*/.questforge/` cache when present, and translate file arguments with `wslpath -w`.
 
 ## Comparison
 
-| Aspect | Monolithic CLI + Direct Shell Calls | `swartch` 4.0 Crates + MCP JSON-RPC + WSL Interop (Chosen) |
+| Aspect | Monolithic CLI + Direct Shell Calls | Stratified Crates + MCP JSON-RPC + WSL Interop (Chosen) |
 |---|---|---|
-| Layer isolation | Weak; internal types leak across modules | Enforced by `swartch` and `compile_fail` doctests |
+| Layer isolation | Weak; internal types leak across modules | Enforced by crate boundaries and `compile_fail` doctests |
 | AI agent safety | Unstructured shell execution | 14 typed JSON-RPC 2.0 MCP tools scoped by `--role` |
 | Linux / WSL Store uploads | Blocked (no native Linux `ovr-platform-util`) | Seamless WSL interop via `ovr-platform-util.exe` + `wslpath -w` |
 
@@ -42,7 +42,7 @@ We needed an architecture that:
 ## Consequences
 
 ### Positive
-- `0 offences` under `swartch` across all 11 Rust packages.
+- Clean layer separation across all 11 Rust packages.
 - Full 1:1 `ovr-platform-util` parity across CLI (`quest ops store`) and MCP (`ovr_store`) on Windows and WSL.
 
 ### Negative

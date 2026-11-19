@@ -18,7 +18,7 @@
 
 ### Architecture & Workflows
 - [Architecture](3-design/architecture.md) — System layers, AI/MCP agent flow, WSL interop, and persistence schema
-- [Architecture Compliance Checklist](3-design/compliance/compliance_checklist.md) — Enforceable `swartch` Architecture 4.0 checklist
+- [Architecture Compliance Checklist](3-design/compliance/compliance_checklist.md) — Enforceable workspace architecture checklist
 - [Architecture Decision Records](3-design/adr/README.md) — Recorded architectural decisions
 - [Role Workflows Index](3-design/workflow/README.md) — Multi-role ecosystem overview
   - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen

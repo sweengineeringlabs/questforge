@@ -102,7 +102,7 @@ struct DoctorArgs {
     /// Directory containing quest_forge.yaml (defaults to current directory)
     #[arg(long, default_value = ".")]
     project_dir: PathBuf,
-    /// CI mode (ignores missing USB headset; enforces signing and swartch gate)
+    /// CI mode (ignores missing USB headset; enforces signing and project layout gate)
     #[arg(long)]
     ci: bool,
     /// Strict mode (treats signing warnings as failures)

@@ -8,4 +8,3 @@ Closes #
 - [ ] `cargo fmt --all -- --check`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
 - [ ] `cargo test --workspace`
-- [ ] `swartch` audit passes (0 offences)

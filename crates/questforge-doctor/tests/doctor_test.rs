@@ -73,14 +73,6 @@ project:
             stderr: String::new(),
         },
     );
-    commands.insert(
-        "swartch".to_string(),
-        CmdOutput {
-            success: true,
-            stdout: "audit passed".to_string(),
-            stderr: String::new(),
-        },
-    );
 
     (root, MockDoctorEnv { vars, commands })
 }
@@ -128,8 +120,10 @@ fn test_doctor_missing_manifest_fails_with_remediation_error() {
 }
 
 #[test]
-fn test_doctor_ci_mode_skips_headset_and_enforces_signing_and_swartch_edge() {
+fn test_doctor_ci_mode_skips_headset_and_enforces_signing_and_layout_edge() {
     let (root, mut mock) = create_full_fixture();
+    let proj = root.path().join("app");
+    assert!(fs::remove_file(proj.join("config").join("vocabulary.toml")).is_ok());
     mock.vars.remove("QUEST_KEYSTORE_PATH");
     mock.commands.insert(
         "adb".to_string(),
@@ -139,17 +133,9 @@ fn test_doctor_ci_mode_skips_headset_and_enforces_signing_and_swartch_edge() {
             stderr: String::new(),
         },
     );
-    mock.commands.insert(
-        "swartch".to_string(),
-        CmdOutput {
-            success: false,
-            stdout: "[AF_ERR_004] violation".to_string(),
-            stderr: String::new(),
-        },
-    );
 
     let opts = DoctorOptions {
-        project_dir: root.path().join("app"),
+        project_dir: proj,
         ci: true,
         strict: false,
         fix: false,

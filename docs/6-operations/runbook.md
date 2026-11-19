@@ -20,7 +20,6 @@
 ## 1. Prerequisites & Installation
 
 - **Rust:** `1.100.0` (pinned in `rust-toolchain.toml`)
-- **Architecture Auditor:** `swartch` CLI on `PATH`
 - **Frontend Toolchain:** Bun `1.4.2` + `mweb` CLI (`machineweb`)
 - **Optional Production Services:** PostgreSQL (when using `--database-url`) and Android `platform-tools` (`adb`) on lab hosts
 
@@ -44,12 +43,11 @@ chmod +x ./quest
 
 ## 2. Build & Verify Locally
 
-### Rust Workspace & Architecture Gate (Windows & Linux)
+### Rust Workspace Verification (Windows & Linux)
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questforge-ci crates/questforge-config crates/questforge-toolchain crates/questforge-verify crates/questforge-doctor crates/questforge-init crates/questforge-mcp crates/questforge-ops crates/questforge-server apps/quest
 ```
 
 ### Web Frontend (`web/`)

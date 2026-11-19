@@ -1214,7 +1214,7 @@ Reasons:
 ## Architecture Enforcement
 
 ```text
-swartch CLI (Architecture 4.0)
+Architecture & Layer Compliance Gate
 ```
 
 Used to scaffold, audit, and auto-remediate QuestForge's Rust `1.100.0` crates and workspaces (`cli`, `api`, `std`, `spi`, `lib`, `gateway`, `handler`) against Architecture 4.0 invariant rules, configured via `config/vocabulary.toml` (or `vocabulary.toml`).
