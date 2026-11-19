@@ -7,7 +7,8 @@
 ## Documentation Index
 
 ### Getting Started & Operations
-- [Runbook & Playbook](6-operations/runbook.md) — Quick-start commands, control plane, lab operations, and troubleshooting
+- [Quick Start Guide](quickstart.md) — Step-by-step installation and agent launch for Windows and Linux / WSL
+- [Runbook & Playbook](6-operations/runbook.md) — Control plane, lab operations, Meta Horizon Store uploads, and troubleshooting
 - [Developer Guide](4-development/developer_guide.md) — App developer workflows and contributor conventions
 - [Showcase App (`orbit-pulse-vr`)](../examples/orbit-pulse-vr/quest_forge.yaml) — Native OpenXR VR showcase with hand tracking, passthrough, spatial anchors, and 120 Hz support
 
