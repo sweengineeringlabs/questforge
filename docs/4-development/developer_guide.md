@@ -12,8 +12,9 @@ Guide for **XR Application Developers** building Meta Quest apps and **Platform 
   - [1. Scaffold & Sync Declarative XR Projects](#1-scaffold--sync-declarative-xr-projects)
   - [2. Static Checks, Toolchain Setup & Diagnostics](#2-static-checks-toolchain-setup--diagnostics)
   - [3. Build, SBOM & Store Verification](#3-build-sbom--store-verification)
-  - [4. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)](#4-showcase-app-examplesorbit-pulse-vr--enterprise-mdm-quest_forgeyaml-mdm)
-  - [5. AI Agents & Provider Auth (`quest auth` & `quest agent`)](#5-ai-agents--provider-auth-quest-auth--quest-agent)
+  - [4. Declarative Hand Gestures & Dual-Mode Interaction](#4-declarative-hand-gestures--dual-mode-interaction)
+  - [5. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)](#5-showcase-app-examplesorbit-pulse-vr--enterprise-mdm-quest_forgeyaml-mdm)
+  - [6. AI Agents & Provider Auth (`quest auth` & `quest agent`)](#6-ai-agents--provider-auth-quest-auth--quest-agent)
 - [Part 2: QuestForge Contributors](#part-2-questforge-contributors)
   - [Workspace Structure](#workspace-structure)
   - [Key Conventions](#key-conventions)
@@ -62,7 +63,43 @@ quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-ver
 quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app --format html --out scorecard.html
 ```
 
-### 4. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)
+### 4. Declarative Hand Gestures & Dual-Mode Interaction
+
+QuestForge supports declarative spatial gestures and a stratified hexagonal input layer ([ADR-002](../3-design/adr/002_stratified_input_and_gesture_kinematics.md)). This enables zero-hardware testing: the exact same release APK evaluates hand-wave interactions via OpenXR joint tracking, phone IR proximity sensors, or touch flings.
+
+#### Declaring Gestures in `specs/*_xr.yaml`
+```yaml
+interactables:
+  - id: wave_gesture
+    kind: hand_gesture
+    gesture: wave
+    two_handed: false
+    haptic_intensity: 70
+    on_activate: OnWaveGestureDetected
+```
+
+#### Synchronizing & Implementing Action Handlers
+Run `quest sync` to generate the strongly-typed trait and gesture dispatcher:
+```pwsh
+quest sync --project-dir my-quest-app
+```
+In your application logic (e.g. `src/orbit_arena_actions.rs` in Rust, or `Assets/Scripts/*` in Unity):
+```rust
+impl OrbitArenaXrActions for OrbitArenaGame {
+    fn on_wave_gesture_detected(&mut self) {
+        // Trigger gameplay mechanic (e.g. kinetic shield boost +20%)
+        self.shield_charge = self.shield_charge.saturating_add(20).min(100);
+        self.score += 50 * self.combo;
+    }
+}
+```
+
+#### Three Evaluation Modes for Developers & Judges
+1. **Meta Quest Headset (OpenXR):** Optical camera sensors track 26 joints per hand (`XR_EXT_hand_tracking`). The generated `OpenXrHandWaveDetector` evaluates palm lateral velocity ($v_x > 0.20\text{ m/s}$) and direction alternations at 120 Hz with zero heap allocations.
+2. **Physical Android Phone / Tablet:** Deploy the APK to any standard Android device. **Wave your hand physically over the phone's front camera / IR proximity sensor ($< 5\text{ cm}$)** to trigger the wave gesture hands-free.
+3. **Headless Android CI / Emulator:** Rapidly swipe across the screen ($|v_x| > 500\text{ px/s}$) or invoke JNI `nativeOnGesture(1)` to run automated regression tests without human intervention.
+
+### 5. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)
 Inspect [examples/orbit-pulse-vr](file:///c:/phd-systems/swelabs/metaquest/examples/orbit-pulse-vr/quest_forge.yaml) for a working Native Rust OpenXR project:
 ```pwsh
 cargo test --manifest-path examples/orbit-pulse-vr/Cargo.toml
@@ -70,7 +107,7 @@ quest check --project-dir examples/orbit-pulse-vr
 ```
 Optionally add `mdm:` (`meta-hms`, `managexr`, or `arborxr`) in `quest_forge.yaml` so `quest ops hms-push --project-dir my-quest-app --apk dist/app.apk` reads your provider, `app_id`, `channel`, and `device_group` automatically.
 
-### 5. AI Agents & Provider Auth (`quest auth` & `quest agent`)
+### 6. AI Agents & Provider Auth (`quest auth` & `quest agent`)
 Authenticate or inspect OAuth/API-key status across `gemini`, `openai`, and `anthropic`:
 ```pwsh
 quest auth --status

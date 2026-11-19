@@ -45,6 +45,7 @@ flowchart LR
 ## Value Proposition
 
 - **Eliminate Onboarding & Environment Drift:** Turn fragile Unity/Unreal + JDK + Android SDK/NDK + Meta XR SDK + OpenXR setups into a repeatable, fail-fast checklist (`quest init`, `quest setup`, `quest doctor`).
+- **Zero-Hardware Shift-Left Spatial Testing:** Decouple spatial interaction logic from physical optical camera headsets via a hexagonal input layer ([ADR-002](../3-design/adr/002_stratified_input_and_gesture_kinematics.md)). Test hand wave gestures hands-free on any Android phone (IR proximity sensor pass < 5cm), in headless CI emulators via touch swipe, or in 6DoF VR on Meta Quest headsets.
 - **Catch Store Rejections Pre-Upload:** Statically verify `.apk` integrity, v1/v2+ signatures, `arm64-v8a` compliance, Meta VRC manifest rules, permissions, and size limits before submission (`quest verify`).
 - **Zero-Trust & Supply-Chain Ready:** Enforce SHA-256 verification on provisioned binaries, emit CycloneDX 1.5 SBOMs and SARIF reports, and enforce RBAC/JWT + immutable audit logs in the control plane (`quest serve`).
 - **Vendor-Agnostic Execution:** Run locally or in any CI provider (`scripts/ci.sh`, GitHub Actions, Azure DevOps, Jenkins) with zero CI vendor lock-in.

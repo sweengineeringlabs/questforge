@@ -11,6 +11,7 @@
 - [1. QA Release Readiness State Machine](#1-qa-release-readiness-state-machine)
 - [2. QA Fleet Validation & Horizon Store Promotion Flow](#2-qa-fleet-validation--horizon-store-promotion-flow)
 - [3. Autonomous QA Agent Remediation & Store Upload Sequence](#3-autonomous-qa-agent-remediation--store-upload-sequence)
+- [4. Multi-Tiered Input & Gesture Testing Surface](#4-multi-tiered-input--gesture-testing-surface)
 
 ---
 
@@ -77,5 +78,17 @@ sequenceDiagram
     MCP-->>Agent: Store upload report + SHA-256
     Agent-->>QA: Confirmed 100/100 VRC compliance & ALPHA channel upload
 ```
+
+---
+
+## 4. Multi-Tiered Input & Gesture Testing Surface
+
+Following [ADR-002](../adr/002_stratified_input_and_gesture_kinematics.md), QA teams and evaluators are never blocked by physical headset availability:
+
+| Testing Tier | Device Surface | Gesture Verification Method |
+|---|---|---|
+| **Tier 1: Physical Headset** | Meta Quest 2 / 3 / 3S / Pro | Optical hand tracking via OpenXR `XR_EXT_hand_tracking` joint velocity & oscillation. |
+| **Tier 2: Physical Android Device** | Standard Android Phone / Tablet | Hands-free wave over front IR proximity sensor (`Sensor.TYPE_PROXIMITY`, $< 5\text{ cm}$). |
+| **Tier 3: Headless CI / AVD** | `mobile-emulator` Android AVD | Touch fling swipe listener (`GestureDetector`) or synthetic JNI entry point (`nativeOnGesture(1)`). |
 
 See the **[Operations Runbook](../../6-operations/runbook.md)** for full QA fleet and Horizon Store commands.

@@ -51,14 +51,14 @@
 ### Architecture & Role Workflows (`3-design/`)
 - [Architecture](3-design/architecture.md) — System layers, AI/MCP agent flow, Linux via WSL interop, and persistence schema
 - [Architecture Compliance Checklist](3-design/compliance/compliance_checklist.md) — Enforceable workspace architecture and security checklist
-- [Architecture Decision Records (`3-design/adr/`)](3-design/adr/README.md) — Index of recorded architectural decisions
+- [Architecture Decision Records (`3-design/adr/`)](3-design/adr/README.md) — Index of recorded architectural decisions ([ADR-001](3-design/adr/001_stratified_architecture_and_mcp_routing.md), [ADR-002](3-design/adr/002_stratified_input_and_gesture_kinematics.md))
 - [Role Workflows Index (`3-design/workflow/`)](3-design/workflow/README.md) — Multi-role ecosystem overview
   - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen
   - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 14-tool MCP agent workflow
   - [Platform Workflow (`--role platform`)](3-design/workflow/platform.md) — CI/CD orchestration, zero-trust toolchains, and failure diagnostics
   - [QA & Release Workflow (`--role qa`)](3-design/workflow/qa.md) — `100/100` VRC verification, lab headset rollout, and Horizon Store uploads
   - [Enterprise Workflow (`--role enterprise`)](3-design/workflow/enterprise.md) — Control plane governance, RBAC, and Meta HMS / MDM distribution
-- [Mobile & Emulator Integration](3-design/mobile-emulator-integration.md) — Device and emulator verification boundary
+- [Mobile & Emulator Integration](3-design/mobile_emulator_integration.md) — Device and emulator verification boundary (dual-mode gesture evaluation)
 
 ### Product & Specifications (`0-ideation/`)
 - [Product Concept & Audiences](0-ideation/concept.md) — Target audiences, positioning, and engine roadmap

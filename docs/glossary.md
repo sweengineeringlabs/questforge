@@ -14,6 +14,8 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 
 **CycloneDX SBOM (Software Bill of Materials)** - Machine-readable supply-chain inventory (`sbom.cdx.json`) emitted by `quest ci`.
 
+**Dual-Mode Gesture Detection** - Interaction pattern where the same application logic evaluates physical 3D spatial hand tracking in OpenXR headsets and hands-free IR proximity sensor sweeps on mobile devices without code duplication ([ADR-002](3-design/adr/002_stratified_input_and_gesture_kinematics.md)).
+
 **Horizon OS (Meta Horizon OS)** - Meta's Android-based mixed-reality operating system powering Meta Quest 2, Quest Pro, Quest 3, and Quest 3S headsets.
 
 **HMS (Meta Horizon Managed Services)** - Meta's enterprise device and application management platform (`graph.oculus.com`), targeted by `quest ops hms-push` and the `publish_mdm` MCP tool.
@@ -30,6 +32,8 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 
 **NDK (Android Native Development Kit)** - Toolchain used to compile native C/C++ and Rust (`aarch64-linux-android`) code for Meta Quest.
 
+**OpenXrHandWaveDetector** - Zero-allocation, 120Hz kinematics detector in Rust tracking palm lateral velocity ($v_x > 0.20\text{ m/s}$) and direction alternations to identify hand-wave gestures from OpenXR `XR_EXT_hand_tracking` joint telemetry.
+
 **OpenXR** - Khronos royalty-free open standard for VR/MR runtime access (`XR_FB_display_refresh_rate`, `XR_FB_passthrough`, `XR_EXT_hand_tracking`, `XR_FB_foveation`, `XR_FB_spatial_entity`).
 
 **ovr-platform-util** - Official Meta Horizon Store command-line utility provisioned by `quest setup --ovr-version latest` and orchestrated 1:1 by `quest ops store` and the `ovr_store` MCP tool.
@@ -43,6 +47,8 @@ Alphabetized list of terms and acronyms used across **QuestForge**.
 **RBAC (Role-Based Access Control)** - Access enforcement in `quest serve` (`questforge-server`) governing six roles: `administrator`, `platform_engineer`, `developer`, `qa_engineer`, `operations_engineer`, and `auditor`.
 
 **SARIF (Static Analysis Results Interchange Format)** - OASIS standard JSON report format (`--format sarif`) emitted by `quest verify` for CI/CD security tabs.
+
+**Stratified Input Architecture** - Hexagonal ports-and-adapters input design pattern decoupling declarative scene interactions (`specs/*_xr.yaml`) from physical headset optical sensors, mobile IR proximity sensors, or synthetic CI test drivers ([ADR-002](3-design/adr/002_stratified_input_and_gesture_kinematics.md)).
 
 **VRC (Virtual Reality Checks)** - Meta's technical, performance, manifest, and security compliance requirements for publishing on the Meta Horizon Store.
 

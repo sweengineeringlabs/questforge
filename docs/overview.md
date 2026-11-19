@@ -26,7 +26,7 @@
   - [Platform Workflow (`--role platform`)](3-design/workflow/platform.md) — CI/CD orchestration, zero-trust toolchains, and failure diagnostics
   - [QA & Release Workflow (`--role qa`)](3-design/workflow/qa.md) — `100/100` VRC verification, lab headset rollout, and Horizon Store uploads
   - [Enterprise Workflow (`--role enterprise`)](3-design/workflow/enterprise.md) — Control plane governance, RBAC, and Meta HMS / MDM distribution
-- [Mobile & Emulator Integration](3-design/mobile-emulator-integration.md) — Device and emulator verification boundary
+- [Mobile & Emulator Integration](3-design/mobile_emulator_integration.md) — Device and emulator verification boundary
 
 ### Product & Specifications
 - [Product Concept & Audiences](0-ideation/concept.md) — Target audiences, positioning, and engine roadmap

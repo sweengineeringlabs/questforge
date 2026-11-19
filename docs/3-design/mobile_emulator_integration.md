@@ -52,7 +52,8 @@ flowchart LR
 |---|---|---|
 | `adb` discovery (`QD-007`), `install`/rollback (`QO-004`, `QO-005`), `logcat` (`QO-006`), `screencap` (`QO-007`), SELinux `Enforcing` | **`mobile-emulator` AVD** | Real `adb` transport and Android package manager without physical hardware |
 | APK integrity, v1/v2+ signatures, `arm64-v8a` ABI, Meta VRC `AndroidManifest.xml` flags, permissions, size | **`quest verify` (#8)** | Static binary/ZIP inspection; catches store blockers pre-upload |
-| Horizon OS XR rendering, 6DoF/hand-tracking, real headset `dumpsys` battery/firmware schemas | **Real Quest Hardware / Captured Fixtures** | Standard Android AVDs lack Meta Horizon OS runtime; `quest ops` (#10) pairs live AVD `adb` tests with mocked `dumpsys` fixtures |
+| **Hand-Wave & Gesture Interaction Logic** | **`mobile-emulator` AVD + Physical Phone** | Verified via Android IR proximity sensor (`Sensor.TYPE_PROXIMITY`), touch swipe fallback, or JNI injection ([ADR-002](adr/002_stratified_input_and_gesture_kinematics.md)) |
+| Horizon OS stereo XR rendering, optical 26-joint hand tracking, real headset `dumpsys` schemas | **Real Quest Hardware / Meta XR Simulator** | Standard Android AVDs lack Meta Horizon OS display server; `quest ops` (#10) pairs live AVD tests with mocked `dumpsys` fixtures |
 
 ---
 

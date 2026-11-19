@@ -2,12 +2,16 @@
 
 **Audience**: Architects, technical leads, platform engineers, security reviewers, and QuestForge contributors
 
+> [!NOTE]
+> **TL;DR**: QuestForge is a stratified 11-package Rust workspace delivering a declarative, zero-trust developer platform, CI/CD pipeline, and AI agent orchestrator for Meta Quest. It decouples spatial computing domain logic from vendor SDKs and physical hardware via a hexagonal input architecture ([ADR-002](adr/002_stratified_input_and_gesture_kinematics.md)).
+
 ## Table of Contents
 
 - [Overview](#overview)
 - [Stakeholders & Concerns](#stakeholders--concerns)
 - [Component & Layer Diagram](#component--layer-diagram)
 - [End-to-End Data Flow (Code → Horizon OS → Meta Horizon Store & HMS)](#end-to-end-data-flow-code--horizon-os--meta-horizon-store--hms)
+- [Stratified Input Architecture & Hexagonal Gesture Layer](#stratified-input-architecture--hexagonal-gesture-layer)
 - [AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)](#ai--llm-agent-interaction-flow-quest-agent--quest-mcp)
 - [Cross-Platform & WSL Interop Architecture](#cross-platform--wsl-interop-architecture)
 - [Control Plane & Persistence Schema (`questforge-server`)](#control-plane--persistence-schema-questforge-server)
@@ -77,6 +81,43 @@ flowchart LR
     Verify -->|"Store Channel"| Store["quest ops store / ovr_store (ALPHA -> PROD)"]
     Verify -->|"Enterprise OTA"| HMS["quest ops hms-push (Meta HMS / ManageXR / ArborXR)"]
 ```
+
+## Stratified Input Architecture & Hexagonal Gesture Layer
+
+A core architectural breakthrough of QuestForge is **Ports & Adapters (Hexagonal Architecture) for Spatial Computing**, codified in [ADR-002](adr/002_stratified_input_and_gesture_kinematics.md). Rather than coupling gameplay code directly to vendor OpenXR headset SDKs, QuestForge decouples declarative interaction contracts (`specs/*_xr.yaml`) from the underlying physical or synthetic hardware sensor source.
+
+```mermaid
+flowchart TD
+    subgraph SpecLayer["Declarative Specification Layer"]
+        YamlSpec["specs/*_xr.yaml (kind: hand_gesture, gesture: wave)"]
+        QuestSync["quest sync (Deterministic Code & Manifest Generator)"]
+        YamlSpec --> QuestSync
+    end
+
+    subgraph CoreDomain["Core Domain Logic (Developer Owned & Zero-Allocation)"]
+        Iface["ISceneXrActions / SceneXrActions (Pure Trait/Interface)"]
+        Dispatch["SceneXrScene::dispatch_gesture('wave', handler)"]
+        State["Application Simulation Loop (Zero Per-Frame Allocations)"]
+        Iface --> State
+        Dispatch --> Iface
+    end
+
+    subgraph Adapters["Interchangeable Hardware & Verification Adapters"]
+        OXR["Tier A: OpenXR Adapter\n(XR_EXT_hand_tracking Joint Kinematics\nOpenXrHandWaveDetector 120Hz)"]
+        Sensor["Tier B: Android IR Proximity Adapter\n(Sensor.TYPE_PROXIMITY Hands-Free Pass < 5cm)"]
+        Touch["Tier C: Touch & Synthetic CI Adapter\n(GestureDetector Fling / Native JNI Dispatch)"]
+    end
+
+    QuestSync --> Iface & Dispatch
+    OXR -->|dispatch_gesture| Dispatch
+    Sensor -->|"JNI nativeOnGesture(1)"| Dispatch
+    Touch -->|"JNI nativeDispatchAction"| Dispatch
+```
+
+### Benefits of the Stratified Input Pattern:
+1. **Zero-Hardware Evaluation:** Hackathon evaluators and developers without a Meta Quest headset can physically wave a hand over any standard Android phone's IR proximity sensor to test gesture mechanics hands-free.
+2. **Headless Cloud CI:** Cloud runners (GitHub Actions) execute synthetic gesture verification in headless Android AVDs (`mobile-emulator`) without human touch or physical optical camera rigs.
+3. **Enterprise Dual-Surface Mode:** The exact same release APK operates seamlessly as an immersive 6DoF spatial VR application on Quest or as a 2D supervisor / companion kiosk screen on mobile devices without maintaining divergent codebases.
 
 ## AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)
 

@@ -10,7 +10,8 @@ Index of Architecture Decision Records for **QuestForge**, following `../templat
 
 | ADR | Title | Status | Date |
 |---|---|---|---|
-| [ADR-001](001-stratified-architecture-and-mcp-routing.md) | Stratified Workspace Architecture, Role-Based MCP Routing, and WSL Store Interop | Accepted | 2026-11-18 |
+| [ADR-001](001_stratified_architecture_and_mcp_routing.md) | Stratified Workspace Architecture, Role-Based MCP Routing, and WSL Store Interop | Accepted | 2026-11-18 |
+| [ADR-002](002_stratified_input_and_gesture_kinematics.md) | Stratified Input Architecture and Dual-Mode Gesture Kinematics | Accepted | 2026-11-19 |
 
 ---
 
