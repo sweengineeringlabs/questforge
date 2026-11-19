@@ -275,6 +275,7 @@ struct McpArgs {
 enum CliAgentGoal {
     Check,
     Release,
+    Deploy,
     FleetRelease,
 }
 
@@ -283,6 +284,7 @@ impl From<CliAgentGoal> for AgentGoal {
         match value {
             CliAgentGoal::Check => Self::Check,
             CliAgentGoal::Release => Self::Release,
+            CliAgentGoal::Deploy => Self::Deploy,
             CliAgentGoal::FleetRelease => Self::FleetRelease,
         }
     }

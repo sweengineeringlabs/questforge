@@ -225,7 +225,7 @@ impl CiOrchestrator {
                     log_excerpt: tail_lines(&out.stderr, &out.stdout, 20),
                 });
             }
-            if cfg.project.engine == EngineKind::Rust {
+            if cfg.project.engine == EngineKind::Rust && !apk_path.exists() {
                 package_rust_apk(&opts.project_dir, &cfg, &apk_path)?;
             }
             if !apk_path.exists() {
@@ -425,11 +425,10 @@ fn package_rust_apk(
     cfg: &QuestforgeConfig,
     apk_path: &Path,
 ) -> Result<(), CiError> {
-    let manifest_path = project_dir.join("AndroidManifest.xml");
-    let manifest_bytes = fs::read(&manifest_path).map_err(|source| CiError::Io {
-        path: manifest_path,
-        source,
-    })?;
+    let manifest_bytes = find_compiled_manifest_axml(project_dir).unwrap_or_else(|| {
+        let manifest_path = project_dir.join("AndroidManifest.xml");
+        fs::read(&manifest_path).unwrap_or_default()
+    });
 
     let lib_stem: String = cfg
         .project
@@ -595,6 +594,21 @@ fn find_compiled_resources_arsc(project_dir: &Path) -> Option<Vec<u8>> {
     for path in candidates {
         if let Ok(bytes) = fs::read(path) {
             return Some(bytes);
+        }
+    }
+    None
+}
+
+fn find_compiled_manifest_axml(project_dir: &Path) -> Option<Vec<u8>> {
+    let candidates = [
+        project_dir.join("android").join("AndroidManifest.xml"),
+        project_dir.join("target").join("AndroidManifest.xml"),
+    ];
+    for path in candidates {
+        if let Ok(bytes) = fs::read(path) {
+            if bytes.len() >= 4 && bytes[0..4] == [0x03, 0x00, 0x08, 0x00] {
+                return Some(bytes);
+            }
         }
     }
     None

@@ -22,6 +22,8 @@ pub enum AgentGoal {
     /// Check + build APK/SBOM + verify 100/100 Meta VRC readiness.
     #[default]
     Release,
+    /// Release + upload to Meta Horizon Store release channel.
+    Deploy,
     /// Release + discover connected QA lab headsets via `fleet_discover`.
     FleetRelease,
 }
@@ -61,7 +63,7 @@ impl AgentRole {
             Self::Studio => "You are the QuestForge XR Studio Agent for Unity/Unreal/Rust teams. Use MCP tools (`init_project`, `setup_toolchain`, `doctor_check`, `check_source`, `sync_project`, `build_project`, `verify_release`) to keep projects VRC-ready and shippable. On failure, diagnose and self-heal autonomously.",
             Self::Enterprise => "You are the QuestForge Enterprise XR Agent for regulated training and simulation teams. Prioritize supply-chain verification, SBOM/release auditability, and controlled MDM/lab rollout (`verify_release`, `fleet_discover`, `publish_mdm`) using MCP tools.",
             Self::Platform => "You are the QuestForge Platform & DevOps Agent. Focus on environment parity (`setup_toolchain`, `doctor_check`), CI pipeline generation (`generate_pipeline`), static drift (`check_source`, `sync_project`), and build diagnostics (`analyze_build_failure`).",
-            Self::Qa => "You are the autonomous QuestForge QA & Release Manager Agent. Focus on release readiness (`verify_release`, `check_source`), Horizon Store uploads (`ovr_store`), and headset fleet rollout (`fleet_discover`, `publish_mdm`). If a tool fails (e.g., missing `ovr-platform-util` or APK/manifest rejection), autonomously diagnose with `analyze_build_failure`, remediate via `setup_toolchain`/`sync_project`/`build_project`, re-verify, and retry before reporting.",
+            Self::Qa => "You are the autonomous QuestForge QA & Release Manager Agent. Focus on release readiness (`verify_release`, `check_source`), Horizon Store uploads (`upload_store`, `ovr_store`), and headset fleet rollout (`fleet_discover`, `publish_mdm`). To deploy or upload to the store, verify the APK with `verify_release`, then call `upload_store` with `project_dir`. Store parameters (`app_id`, `channel`, `age_group`, `notes`) are auto-resolved from `quest_forge.yaml`. If any step fails, diagnose with `analyze_build_failure` or check logs before reporting.",
             Self::Developer => "You are the QuestForge XR Developer Agent. Use the provided MCP tools to inspect, sync, diagnose, build, verify, or deploy Quest projects.",
         }
     }
@@ -577,7 +579,7 @@ impl QuestXrAgent {
             .and_then(|p| p.as_str())
             .map(ToString::to_string);
 
-        if let Some(apk_path) = apk_path_str {
+        if let Some(ref apk_path) = apk_path_str {
             if Path::new(&apk_path).exists() {
                 let (ver_ok, ver_val) = call_mcp_tool(
                     rpc,
@@ -609,7 +611,30 @@ impl QuestXrAgent {
             }
         }
 
-        // 4. Optional QA lab discovery (`fleet_discover`).
+        // 4. Optional store upload (`upload_store`) when goal is Deploy.
+        if opts.goal == AgentGoal::Deploy {
+            let apk_param = apk_path_str.unwrap_or_default();
+            let (upload_ok, _) = call_mcp_tool(
+                rpc,
+                &mut steps,
+                "upload_store",
+                json!({
+                    "project_dir": opts.project_dir.display().to_string(),
+                    "apk_path": apk_param,
+                }),
+            )?;
+            if !upload_ok {
+                return Ok(AgentRunReport {
+                    goal: opts.goal,
+                    discovered_tools,
+                    steps,
+                    verify_score,
+                    passed: false,
+                });
+            }
+        }
+
+        // 5. Optional QA lab discovery (`fleet_discover`).
         if opts.goal == AgentGoal::FleetRelease {
             let (fleet_ok, _) = call_mcp_tool(
                 rpc,

@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use questforge_ci::{CiOptions, CiOrchestrator, CiProvider};
-use questforge_config::EngineKind;
+use questforge_config::{EngineKind, QuestforgeConfig};
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_ops::{
@@ -256,28 +256,32 @@ impl QuestMcpServer {
             },
             McpToolDefinition {
                 name: "upload_store".to_string(),
-                description: "Upload a signed Quest APK directly to a Meta Horizon Store release channel via ovr-platform-util.".to_string(),
+                description: "Upload a signed Quest APK directly to a Meta Horizon Store release channel via ovr-platform-util. If app_id, channel, age_group, or apk_path are omitted, they are auto-resolved from quest_forge.yaml (store block) in project_dir.".to_string(),
                 input_schema: json!({
                     "type": "object",
-                    "required": ["app_id", "apk_path"],
                     "properties": {
+                        "project_dir": { "type": "string", "default": "." },
                         "app_id": { "type": "string" },
                         "apk_path": { "type": "string" },
                         "channel": { "type": "string", "default": "ALPHA" },
                         "app_secret_env": { "type": "string", "default": "QUEST_META_APP_SECRET" },
                         "notes": { "type": "string" },
+                        "age_group": { "type": "string" },
+                        "wait_for_postprocessing": { "type": "boolean", "default": false },
+                        "draft": { "type": "boolean", "default": false },
                         "ovr_bin": { "type": "string" }
                     }
                 }),
             },
             McpToolDefinition {
                 name: "ovr_store".to_string(),
-                description: "Execute any 1:1 ovr-platform-util Horizon Store operation (upload-quest-build, download-quest-build, get-release-channel-data, set-release-channel-build, download-asset-file, version).".to_string(),
+                description: "Execute any 1:1 ovr-platform-util Horizon Store operation (upload-quest-build, download-quest-build, get-release-channel-data, set-release-channel-build, download-asset-file, version). If app_id, channel, age_group, or apk_path are omitted, they are auto-resolved from quest_forge.yaml (store block) in project_dir.".to_string(),
                 input_schema: json!({
                     "type": "object",
-                    "required": ["action", "app_id"],
+                    "required": ["action"],
                     "properties": {
                         "action": { "type": "string", "enum": ["upload-quest-build", "download-quest-build", "get-release-channel-data", "set-release-channel-build", "download-asset-file", "version"] },
+                        "project_dir": { "type": "string", "default": "." },
                         "app_id": { "type": "string" },
                         "apk_path": { "type": "string" },
                         "channel": { "type": "string" },
@@ -285,6 +289,9 @@ impl QuestMcpServer {
                         "dir_path": { "type": "string" },
                         "dlc_sku": { "type": "string" },
                         "notes": { "type": "string" },
+                        "age_group": { "type": "string" },
+                        "wait_for_postprocessing": { "type": "boolean", "default": false },
+                        "draft": { "type": "boolean", "default": false },
                         "app_secret_env": { "type": "string", "default": "QUEST_META_APP_SECRET" },
                         "ovr_bin": { "type": "string" }
                     }
@@ -826,39 +833,85 @@ fn call_setup_toolchain(workspace_root: &Path, args: &Value) -> Result<String, S
 }
 
 fn call_upload_store(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let proj_raw = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".");
+    let proj_path = resolve_workspace_path(workspace_root, proj_raw);
+    let cfg = QuestforgeConfig::load_from_dir(&proj_path).ok();
+    let store_cfg = cfg.as_ref().and_then(|c| c.store.as_ref());
+
     let app_id = args
         .get("app_id")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "missing app_id".to_string())?
-        .to_string();
-    let apk_raw = args
+        .filter(|s| !s.is_empty() && *s != "123456789012345")
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.app_id.clone()))
+        .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+        .ok_or_else(|| {
+            "missing app_id (neither provided nor configured in quest_forge.yaml store block)"
+                .to_string()
+        })?;
+
+    let apk_path = args
         .get("apk_path")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "missing apk_path".to_string())?;
-    let apk_path = resolve_workspace_path(workspace_root, apk_raw);
+        .filter(|s| !s.is_empty())
+        .map(|raw| resolve_workspace_path(workspace_root, raw))
+        .or_else(|| {
+            let dist = proj_path.join("dist");
+            if let Ok(entries) = fs::read_dir(&dist) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.extension().is_some_and(|ext| ext == "apk") {
+                        return Some(p);
+                    }
+                }
+            }
+            None
+        })
+        .ok_or_else(|| "missing apk_path (no APK specified and none found in dist/)".to_string())?;
+
     let channel = args
         .get("channel")
         .and_then(|v| v.as_str())
-        .unwrap_or("ALPHA")
-        .to_string();
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.map(|s| s.default_channel.clone()))
+        .unwrap_or_else(|| "ALPHA".to_string());
+
     let secret_env = args
         .get("app_secret_env")
         .and_then(|v| v.as_str())
         .unwrap_or("QUEST_META_APP_SECRET");
     let app_secret = std::env::var(secret_env).unwrap_or_default();
+
     let release_notes = args
         .get("notes")
         .and_then(|v| v.as_str())
-        .map(ToString::to_string);
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.release_notes.clone()));
+
     let age_group = args
         .get("age_group")
         .and_then(|v| v.as_str())
-        .map(ToString::to_string);
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.age_group.clone()));
+
     let wait_for_postprocessing = args
         .get("wait_for_postprocessing")
         .and_then(|v| v.as_bool())
+        .or_else(|| store_cfg.map(|s| s.wait_for_postprocessing))
         .unwrap_or(false);
-    let draft = args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    let draft = args
+        .get("draft")
+        .and_then(|v| v.as_bool())
+        .or_else(|| store_cfg.map(|s| s.draft))
+        .unwrap_or(false);
+
     let ovr_bin = args
         .get("ovr_bin")
         .and_then(|v| v.as_str())
@@ -883,6 +936,14 @@ fn call_upload_store(workspace_root: &Path, args: &Value) -> Result<String, Stri
 }
 
 fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let proj_raw = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".");
+    let proj_path = resolve_workspace_path(workspace_root, proj_raw);
+    let cfg = QuestforgeConfig::load_from_dir(&proj_path).ok();
+    let store_cfg = cfg.as_ref().and_then(|c| c.store.as_ref());
+
     let action_raw = args
         .get("action")
         .and_then(|v| v.as_str())
@@ -899,27 +960,82 @@ fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String>
     let app_id = args
         .get("app_id")
         .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
+        .filter(|s| !s.is_empty() && *s != "123456789012345")
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.app_id.clone()))
+        .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+        .unwrap_or_default();
     let secret_env = args
         .get("app_secret_env")
         .and_then(|v| v.as_str())
         .unwrap_or("QUEST_META_APP_SECRET");
     let app_secret = std::env::var(secret_env).unwrap_or_default();
 
+    let apk_path = args
+        .get("apk_path")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|raw| resolve_workspace_path(workspace_root, raw))
+        .or_else(|| {
+            if matches!(action, OvrStoreAction::UploadQuestBuild) {
+                let dist = proj_path.join("dist");
+                if let Ok(entries) = fs::read_dir(&dist) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.extension().is_some_and(|ext| ext == "apk") {
+                            return Some(p);
+                        }
+                    }
+                }
+            }
+            None
+        });
+
+    let channel = args
+        .get("channel")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.map(|s| s.default_channel.clone()));
+
+    let release_notes = args
+        .get("notes")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.release_notes.clone()));
+
+    let age_group = args
+        .get("age_group")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.age_group.clone()));
+
+    let wait_for_postprocessing = args
+        .get("wait_for_postprocessing")
+        .and_then(|v| v.as_bool())
+        .or_else(|| store_cfg.map(|s| s.wait_for_postprocessing))
+        .unwrap_or(false);
+
+    let draft = args
+        .get("draft")
+        .and_then(|v| v.as_bool())
+        .or_else(|| store_cfg.map(|s| s.draft))
+        .unwrap_or(false);
+
+    let ovr_bin = args
+        .get("ovr_bin")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from);
+
     let receipt = FleetManager::execute_ovr_store(
         &OvrStoreRequest {
             action,
             app_id,
             app_secret,
-            apk_path: args
-                .get("apk_path")
-                .and_then(|v| v.as_str())
-                .map(|raw| resolve_workspace_path(workspace_root, raw)),
-            channel: args
-                .get("channel")
-                .and_then(|v| v.as_str())
-                .map(ToString::to_string),
+            apk_path,
+            channel,
             build_id: args
                 .get("build_id")
                 .and_then(|v| v.as_str())
@@ -932,23 +1048,11 @@ fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String>
                 .get("dlc_sku")
                 .and_then(|v| v.as_str())
                 .map(ToString::to_string),
-            release_notes: args
-                .get("notes")
-                .and_then(|v| v.as_str())
-                .map(ToString::to_string),
-            age_group: args
-                .get("age_group")
-                .and_then(|v| v.as_str())
-                .map(ToString::to_string),
-            wait_for_postprocessing: args
-                .get("wait_for_postprocessing")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            draft: args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false),
-            ovr_bin: args
-                .get("ovr_bin")
-                .and_then(|v| v.as_str())
-                .map(PathBuf::from),
+            release_notes,
+            age_group,
+            wait_for_postprocessing,
+            draft,
+            ovr_bin,
         },
         &OpsEnv::System,
     )
