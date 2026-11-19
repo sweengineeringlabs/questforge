@@ -71,7 +71,7 @@ quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app
 #### Uploading to Meta Horizon Store (Release Channels)
 QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
 * **Credential Auto-Resolution:** The CLI automatically pulls the developer secret from `$env:QUEST_META_APP_SECRET`.
-* **App ID Validation & Hierarchy:** The CLI verifies whether `--app-id` is provided via:
+* **App ID Validation & Hierarchy:** The CLI verifies whether `--app-id` (registered in [Meta Horizon Developers](https://developers.meta.com/vr/manage/applications/)) is provided via:
   1. CLI flag `--app-id <APP_ID>`
   2. Environment variable `$env:QUEST_META_APP_ID`
   3. `mdm.app_id` in `quest_forge.yaml` (via `--project-dir`)
