@@ -45,7 +45,7 @@ pub enum ReportFormat {
 /// Individual policy check outcome.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicyFinding {
-    /// Rule identifier (`QV-001` .. `QV-006`).
+    /// Rule identifier (`QV-001` .. `QV-009`).
     pub id: String,
     /// Rule name.
     pub name: String,
@@ -327,6 +327,7 @@ impl ApkVerifier {
             ),
             check_uncompressed_resources(resources_arsc_compressed),
             check_horizon_sdk_loaders(&entries),
+            check_backup_security(&manifest_text),
         ];
 
         let score = compute_score(&findings);
@@ -586,6 +587,40 @@ fn check_horizon_sdk_loaders(entries: &[String]) -> PolicyFinding {
             status: RuleStatus::Warn,
             details: "libopenxr_loader.so or libovrplatformloader.so not found in lib/arm64-v8a/".to_string(),
             remediation: Some("Bundle libopenxr_loader.so or libovrplatformloader.so in lib/arm64-v8a/ to satisfy Meta store ingestion".to_string()),
+        }
+    }
+}
+
+fn check_backup_security(manifest: &str) -> PolicyFinding {
+    let has_explicit_false = manifest.contains("allowBackup=\"false\"")
+        || manifest.contains("android:allowBackup=\"false\"");
+    let has_explicit_true = manifest.contains("allowBackup=\"true\"")
+        || manifest.contains("android:allowBackup=\"true\"");
+    let has_allow_backup_token = manifest.contains("allowBackup");
+
+    if has_explicit_false || (has_allow_backup_token && !has_explicit_true) {
+        PolicyFinding {
+            id: "QV-009".to_string(),
+            name: "Private Data Backup Review".to_string(),
+            status: RuleStatus::Pass,
+            details: "android:allowBackup=\"false\" prevents extraction of private app data via adb or cloud".to_string(),
+            remediation: None,
+        }
+    } else if has_explicit_true {
+        PolicyFinding {
+            id: "QV-009".to_string(),
+            name: "Private Data Backup Review".to_string(),
+            status: RuleStatus::Warn,
+            details: "android:allowBackup=\"true\" allows private app data backup; flagged by Meta Store security review".to_string(),
+            remediation: Some("Add android:allowBackup=\"false\" to <application> in AndroidManifest.xml".to_string()),
+        }
+    } else {
+        PolicyFinding {
+            id: "QV-009".to_string(),
+            name: "Private Data Backup Review".to_string(),
+            status: RuleStatus::Warn,
+            details: "android:allowBackup is omitted (defaults to true); allows private app data backup".to_string(),
+            remediation: Some("Explicitly add android:allowBackup=\"false\" to <application> in AndroidManifest.xml".to_string()),
         }
     }
 }
