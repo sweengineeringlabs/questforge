@@ -9,8 +9,8 @@ use questforge_config::{EngineKind, QuestforgeConfig};
 use questforge_doctor::{DoctorOptions, DoctorRunner};
 use questforge_init::{InitOptions, ProjectScaffolder};
 use questforge_ops::{
-    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, OvrStoreAction,
-    OvrStoreRequest, StoreUploadRequest,
+    ChannelTesterAction, ChannelTesterRequest, FleetInventory, FleetManager, HmsReleaseRequest,
+    MdmProvider, OpsEnv, OvrStoreAction, OvrStoreRequest, StoreUploadRequest,
 };
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
 use questforge_verify::{ApkVerifier, VerifyOptions};
@@ -297,6 +297,33 @@ impl QuestMcpServer {
                     }
                 }),
             },
+            McpToolDefinition {
+                name: "manage_channel_testers".to_string(),
+                description: "Invite, list, or generate direct developer portal onboarding URLs for Meta Horizon release channel testers.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "project_dir": { "type": "string", "default": "." },
+                        "channel": { "type": "string", "default": "ALPHA" },
+                        "action": { "type": "string", "enum": ["invite", "list", "deep-link"], "default": "deep-link" },
+                        "emails": { "type": "array", "items": { "type": "string" } },
+                        "app_id": { "type": "string" },
+                        "token_env": { "type": "string", "default": "QUEST_META_APP_SECRET" }
+                    }
+                }),
+            },
+            McpToolDefinition {
+                name: "fleet_connect".to_string(),
+                description: "Connect or pair with a Meta Quest headset over wireless ADB TCP/IP.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "required": ["target"],
+                    "properties": {
+                        "target": { "type": "string" },
+                        "pair_code": { "type": "string" }
+                    }
+                }),
+            },
         ]
     }
 
@@ -416,6 +443,8 @@ impl QuestMcpServer {
             "setup_toolchain" => call_setup_toolchain(&self.workspace_root, &args),
             "upload_store" => call_upload_store(&self.workspace_root, &args),
             "ovr_store" => call_ovr_store(&self.workspace_root, &args),
+            "manage_channel_testers" => call_manage_channel_testers(&self.workspace_root, &args),
+            "fleet_connect" => call_fleet_connect(&args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -1039,7 +1068,18 @@ fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String>
             build_id: args
                 .get("build_id")
                 .and_then(|v| v.as_str())
-                .map(ToString::to_string),
+                .map(ToString::to_string)
+                .or_else(|| {
+                    let dep_path = proj_path.join(".questforge").join("deployments.json");
+                    if let Ok(raw) = fs::read_to_string(&dep_path) {
+                        if let Ok(val) = serde_json::from_str::<Value>(&raw) {
+                            if let Some(bid) = val.get("build_id").and_then(|s| s.as_str()) {
+                                return Some(bid.to_string());
+                            }
+                        }
+                    }
+                    None
+                }),
             dir_path: args
                 .get("dir_path")
                 .and_then(|v| v.as_str())
@@ -1058,6 +1098,87 @@ fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String>
     )
     .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
+}
+
+fn call_manage_channel_testers(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let proj_raw = args
+        .get("project_dir")
+        .and_then(|v| v.as_str())
+        .unwrap_or(".");
+    let proj_path = resolve_workspace_path(workspace_root, proj_raw);
+    let cfg = QuestforgeConfig::load_from_dir(&proj_path).ok();
+    let store_cfg = cfg.as_ref().and_then(|c| c.store.as_ref());
+
+    let app_id = args
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty() && *s != "123456789012345")
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.and_then(|s| s.app_id.clone()))
+        .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+        .unwrap_or_else(|| "1439257382612621".to_string());
+
+    let channel = args
+        .get("channel")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| store_cfg.map(|s| s.default_channel.clone()))
+        .unwrap_or_else(|| "ALPHA".to_string());
+
+    let token_env = args
+        .get("token_env")
+        .and_then(|v| v.as_str())
+        .unwrap_or("QUEST_META_APP_SECRET");
+    let token = std::env::var(token_env).unwrap_or_default();
+
+    let action_str = args
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or("deep-link");
+    let action = match action_str {
+        "invite" => ChannelTesterAction::Invite,
+        "list" => ChannelTesterAction::List,
+        _ => ChannelTesterAction::DeepLink,
+    };
+
+    let emails = args
+        .get("emails")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| item.as_str().map(ToString::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let receipt = FleetManager::manage_channel_testers(
+        &ChannelTesterRequest {
+            app_id,
+            channel,
+            token,
+            action,
+            emails,
+        },
+        &OpsEnv::System,
+    )
+    .map_err(|e| e.to_string())?;
+
+    serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
+}
+
+fn call_fleet_connect(args: &Value) -> Result<String, String> {
+    let target = args
+        .get("target")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing target host:port".to_string())?;
+    let pair_code = args.get("pair_code").and_then(|v| v.as_str());
+
+    if let Some(code) = pair_code {
+        FleetManager::pair_wireless(target, code, &OpsEnv::System).map_err(|e| e.to_string())
+    } else {
+        FleetManager::connect_wireless(target, &OpsEnv::System).map_err(|e| e.to_string())
+    }
 }
 
 fn collect_doc_hits(dir: &Path, needle: &str, hits: &mut Vec<Value>) {

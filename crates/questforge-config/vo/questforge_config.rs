@@ -1,7 +1,7 @@
 //! Typed `quest_forge.yaml` manifest model, defaults, validation, and engine auto-detection.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -344,6 +344,18 @@ pub struct StoreConfig {
     pub wait_for_postprocessing: bool,
     /// Upload build as draft.
     pub draft: bool,
+    /// Optional store listing assets directory (e.g. `store` or `.questforge/store`).
+    pub assets_dir: Option<PathBuf>,
+    /// Optional privacy policy URL required for public review.
+    pub privacy_policy_url: Option<String>,
+    /// Optional terms of service URL.
+    pub terms_url: Option<String>,
+    /// Optional developer support email or URL.
+    pub support_url: Option<String>,
+    /// Optional IARC content rating certificate ID.
+    pub iarc_cert_id: Option<String>,
+    /// Target comfort rating (`COMFORTABLE`, `MODERATE`, `INTENSE`).
+    pub comfort_rating: Option<String>,
 }
 
 impl Default for StoreConfig {
@@ -355,6 +367,12 @@ impl Default for StoreConfig {
             release_notes: None,
             wait_for_postprocessing: false,
             draft: false,
+            assets_dir: None,
+            privacy_policy_url: None,
+            terms_url: None,
+            support_url: None,
+            iarc_cert_id: None,
+            comfort_rating: None,
         }
     }
 }

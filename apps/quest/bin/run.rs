@@ -14,8 +14,8 @@ use questforge_mcp::{
     QuestMcpServer, QuestXrAgent,
 };
 use questforge_ops::{
-    FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider, OpsEnv, OvrStoreAction,
-    OvrStoreRequest, StoreUploadRequest,
+    ChannelTesterAction, ChannelTesterRequest, FleetInventory, FleetManager, HmsReleaseRequest,
+    MdmProvider, OpsEnv, OvrStoreAction, OvrStoreRequest, StoreUploadRequest,
 };
 use questforge_server::{AuthMode, ControlPlaneServer, JwtVerifier, PostgresStore, StoreBackend};
 use questforge_toolchain::{SetupOptions, ToolchainProvisioner};
@@ -277,6 +277,7 @@ enum CliAgentGoal {
     Release,
     Deploy,
     FleetRelease,
+    Promote,
 }
 
 impl From<CliAgentGoal> for AgentGoal {
@@ -286,6 +287,7 @@ impl From<CliAgentGoal> for AgentGoal {
             CliAgentGoal::Release => Self::Release,
             CliAgentGoal::Deploy => Self::Deploy,
             CliAgentGoal::FleetRelease => Self::FleetRelease,
+            CliAgentGoal::Promote => Self::Promote,
         }
     }
 }
@@ -326,6 +328,9 @@ struct AgentArgs {
     /// Autonomous goal to execute (defaults to role default or `release`)
     #[arg(long, value_enum)]
     goal: Option<CliAgentGoal>,
+    /// Target release channel for `promote` or `deploy` goal (e.g. `BETA`, `RC`, `PRODUCTION`)
+    #[arg(long)]
+    channel: Option<String>,
     /// Agent role profile (`studio`, `enterprise`, `platform`, `qa`, `developer`)
     #[arg(long, value_enum, default_value_t = CliAgentRole::Developer)]
     role: CliAgentRole,
@@ -541,6 +546,40 @@ enum OpsAction {
         /// Optional explicit path to `ovr-platform-util`
         #[arg(long)]
         ovr_bin: Option<PathBuf>,
+    },
+    /// Connect to a Quest headset over wireless ADB TCP/IP (e.g. 192.168.1.50:5555)
+    Connect {
+        /// Target host:port (e.g. 192.168.1.50:5555)
+        target: String,
+    },
+    /// Pair with a Quest headset over wireless ADB pairing (Android 11+)
+    Pair {
+        /// Target host:port (e.g. 192.168.1.50:37123)
+        target: String,
+        /// 6-digit Wi-Fi pairing code displayed on the headset
+        #[arg(long)]
+        code: String,
+    },
+    /// Manage Meta Horizon release channel testers (invite, list, generate portal link)
+    Testers {
+        /// Meta Horizon App ID (or auto-resolved from quest_forge.yaml / QUEST_META_APP_ID)
+        #[arg(long)]
+        app_id: Option<String>,
+        /// Optional directory containing quest_forge.yaml
+        #[arg(long)]
+        project_dir: Option<PathBuf>,
+        /// Target release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`)
+        #[arg(long, default_value = "ALPHA")]
+        channel: String,
+        /// Action to perform (`list`, `invite`, `deep-link`)
+        #[arg(long, default_value = "deep-link")]
+        action: String,
+        /// Tester emails to invite
+        #[arg(long)]
+        email: Vec<String>,
+        /// Environment variable holding the Meta Horizon App Secret
+        #[arg(long, default_value = "QUEST_META_APP_SECRET")]
+        app_secret_env: String,
     },
 }
 
@@ -1196,6 +1235,7 @@ fn run_agent(args: AgentArgs) -> ExitCode {
         output_dir: args.output_dir,
         release_version: args.release_version,
         goal,
+        target_channel: args.channel,
         dry_run: args.dry_run,
     };
 
@@ -1736,6 +1776,87 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 }
                 Err(err) => {
                     eprintln!("quest ops store failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::Connect { target } => match FleetManager::connect_wireless(&target, &env) {
+            Ok(msg) => {
+                println!("{msg}");
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("quest ops connect failed: {err}");
+                ExitCode::FAILURE
+            }
+        },
+        OpsAction::Pair { target, code } => {
+            match FleetManager::pair_wireless(&target, &code, &env) {
+                Ok(msg) => {
+                    println!("{msg}");
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops pair failed: {err}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        OpsAction::Testers {
+            app_id,
+            project_dir,
+            channel,
+            action,
+            email,
+            app_secret_env,
+        } => {
+            let resolved_app_id = app_id
+                .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+                .or_else(|| {
+                    project_dir
+                        .as_deref()
+                        .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
+                        .and_then(|cfg| {
+                            cfg.store
+                                .and_then(|s| s.app_id)
+                                .or_else(|| cfg.mdm.map(|m| m.app_id))
+                        })
+                })
+                .unwrap_or_else(|| "1439257382612621".to_string());
+            let token = std::env::var(&app_secret_env).unwrap_or_default();
+            let act = match action.to_ascii_lowercase().as_str() {
+                "invite" => ChannelTesterAction::Invite,
+                "list" => ChannelTesterAction::List,
+                _ => ChannelTesterAction::DeepLink,
+            };
+            let req = ChannelTesterRequest {
+                app_id: resolved_app_id,
+                channel,
+                token,
+                action: act,
+                emails: email,
+            };
+            match FleetManager::manage_channel_testers(&req, &env) {
+                Ok(receipt) => {
+                    if args.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&receipt).unwrap_or_default()
+                        );
+                    } else {
+                        println!(
+                            "Channel Testers ({}, channel: {}): {}",
+                            receipt.action, receipt.channel, receipt.message
+                        );
+                        if !receipt.testers.is_empty() {
+                            println!("  Testers: {}", receipt.testers.join(", "));
+                        }
+                        println!("  Direct Portal Onboarding: {}", receipt.direct_portal_url);
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("quest ops testers failed: {err}");
                     ExitCode::FAILURE
                 }
             }

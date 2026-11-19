@@ -19,6 +19,7 @@ Thumbs.db
 
 # Local work & logs
 .work/
+.questforge/
 *.log
 *.keystore
 *.idsig

@@ -63,7 +63,7 @@ fn test_verify_compliant_apk_passes_and_renders_all_formats_happy() {
         panic!("failed to create tempdir");
     };
     let apk = dir.path().join("release.apk");
-    let manifest = r#"<manifest package="com.acme.vr"><uses-feature android:name="android.hardware.vr.headtracking"/><application><activity><intent-filter><category android:name="com.oculus.intent.category.VR"/></intent-filter></activity></application></manifest>"#;
+    let manifest = r#"<manifest package="com.acme.vr"><uses-feature android:name="android.hardware.vr.headtracking"/><application android:allowBackup="false"><activity><intent-filter><category android:name="com.oculus.intent.category.VR"/></intent-filter></activity></application></manifest>"#;
     write_test_apk(&apk, manifest, true, true);
 
     let report = ApkVerifier::verify(&VerifyOptions {
@@ -119,7 +119,7 @@ fn test_verify_sensitive_permissions_warns_edge() {
         panic!("failed to create tempdir");
     };
     let apk = dir.path().join("mic.apk");
-    let manifest = r#"<manifest package="com.acme.mic"><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-feature android:name="android.hardware.vr.headtracking"/></manifest>"#;
+    let manifest = r#"<manifest package="com.acme.mic"><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-feature android:name="android.hardware.vr.headtracking"/><application android:allowBackup="false"/></manifest>"#;
     write_test_apk(&apk, manifest, true, true);
 
     let report = ApkVerifier::verify(&VerifyOptions {
@@ -133,5 +133,69 @@ fn test_verify_sensitive_permissions_warns_edge() {
             if r.ready
                 && r.score == 95
                 && r.findings.iter().any(|f| f.id == "QV-005" && f.status == RuleStatus::Warn)
+    ));
+}
+
+#[test]
+fn test_verify_store_readiness_assets_and_privacy_policy_happy() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let apk = dir.path().join("release.apk");
+    let manifest = r#"<manifest package="com.acme.vr"><uses-feature android:name="android.hardware.vr.headtracking"/><application android:allowBackup="false"><activity><intent-filter><category android:name="com.oculus.intent.category.VR"/></intent-filter></activity></application></manifest>"#;
+    write_test_apk(&apk, manifest, true, true);
+
+    let store_dir = dir.path().join("store");
+    assert!(fs::create_dir_all(store_dir.join("screenshots")).is_ok());
+    assert!(fs::write(store_dir.join("icon.png"), b"PNG").is_ok());
+    assert!(fs::write(store_dir.join("hero.png"), b"PNG").is_ok());
+    assert!(fs::write(store_dir.join("screenshots").join("1.png"), b"PNG").is_ok());
+
+    let report = ApkVerifier::verify(&VerifyOptions {
+        apk_path: apk,
+        project_dir: Some(dir.path().to_path_buf()),
+        max_apk_bytes: None,
+    });
+    assert!(matches!(
+        report,
+        Ok(ref r)
+            if r.ready
+                && r.score == 100
+                && r.findings.iter().any(|f| f.id == "QV-010" && f.status == RuleStatus::Pass)
+    ));
+}
+
+#[test]
+fn test_verify_store_readiness_insecure_privacy_policy_fails_error() {
+    let Ok(dir) = TempDir::new() else {
+        panic!("failed to create tempdir");
+    };
+    let apk = dir.path().join("release.apk");
+    let manifest = r#"<manifest package="com.acme.vr"><uses-feature android:name="android.hardware.vr.headtracking"/><application android:allowBackup="false"><activity><intent-filter><category android:name="com.oculus.intent.category.VR"/></intent-filter></activity></application></manifest>"#;
+    write_test_apk(&apk, manifest, true, true);
+
+    // Create a quest_forge.yaml with insecure privacy_policy_url
+    let config_yaml = r#"
+version: "1"
+project:
+  name: "Insecure Store VR"
+  package_id: "com.acme.vr"
+  engine: "rust"
+store:
+  privacy_policy_url: "http://insecure.example.com/privacy"
+"#;
+    assert!(fs::write(dir.path().join("quest_forge.yaml"), config_yaml).is_ok());
+
+    let report = ApkVerifier::verify(&VerifyOptions {
+        apk_path: apk,
+        project_dir: Some(dir.path().to_path_buf()),
+        max_apk_bytes: None,
+    });
+    assert!(matches!(
+        report,
+        Ok(ref r)
+            if !r.ready
+                && r.has_failures()
+                && r.findings.iter().any(|f| f.id == "QV-010" && f.status == RuleStatus::Fail)
     ));
 }

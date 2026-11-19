@@ -7,7 +7,9 @@
 mod fleet_manager;
 
 pub use self::fleet_manager::{
-    AdbOutput, AgentSyncReport, DeploymentRecord, DeviceRecord, FleetInventory, FleetManager,
-    HmsReleaseReceipt, HmsReleaseRequest, MdmProvider, MockOpsEnv, OpsEnv, OvrStoreAction,
-    OvrStoreReceipt, OvrStoreRequest, StoreUploadReceipt, StoreUploadRequest,
+    extract_build_id_from_stdout, save_latest_deployment, AdbOutput, AgentSyncReport,
+    ChannelTesterAction, ChannelTesterReceipt, ChannelTesterRequest, DeploymentRecord,
+    DeviceRecord, FleetInventory, FleetManager, HmsReleaseReceipt, HmsReleaseRequest, MdmProvider,
+    MockOpsEnv, OpsEnv, OvrStoreAction, OvrStoreReceipt, OvrStoreRequest, StoreUploadReceipt,
+    StoreUploadRequest,
 };

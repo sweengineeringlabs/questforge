@@ -337,6 +337,10 @@ pub struct OvrStoreReceipt {
     pub ovr_bin: PathBuf,
     /// Raw stdout from `ovr-platform-util`.
     pub stdout: String,
+    /// Direct Meta Horizon Developer test results URL if build_id is available.
+    pub test_results_url: Option<String>,
+    /// Direct Meta Horizon Developer portal user onboarding URL if channel is available.
+    pub invite_url: Option<String>,
 }
 
 /// Request to upload a Quest APK directly to a Meta Horizon Store release channel via `ovr-platform-util`.
@@ -375,6 +379,56 @@ pub struct StoreUploadReceipt {
     pub ovr_bin: PathBuf,
     /// Raw stdout from `ovr-platform-util`.
     pub stdout: String,
+    /// Meta Horizon Build ID parsed from stdout or request.
+    pub build_id: Option<String>,
+    /// Direct Meta Horizon Developer test results URL for this build.
+    pub test_results_url: Option<String>,
+    /// Direct Meta Horizon Developer portal user onboarding URL for this channel.
+    pub invite_url: Option<String>,
+}
+
+/// Release channel tester operations (`QO-013`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChannelTesterAction {
+    /// List active channel testers.
+    List,
+    /// Invite or add testers by email.
+    Invite,
+    /// Generate direct developer portal invite onboarding link.
+    DeepLink,
+}
+
+/// Request payload for release channel tester management.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChannelTesterRequest {
+    /// Meta Horizon App ID.
+    pub app_id: String,
+    /// Target release channel (`ALPHA`, `BETA`, `RC`, `LIVE`).
+    pub channel: String,
+    /// Meta Horizon App Secret or access token.
+    pub token: String,
+    /// Action to execute (`list`, `invite`, `deep-link`).
+    pub action: ChannelTesterAction,
+    /// Tester emails to invite when action is `Invite`.
+    pub emails: Vec<String>,
+}
+
+/// Receipt emitted after executing release channel tester operations.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelTesterReceipt {
+    /// Meta Horizon App ID.
+    pub app_id: String,
+    /// Target release channel.
+    pub channel: String,
+    /// Action executed (`list`, `invite`, `deep-link`).
+    pub action: String,
+    /// Direct developer portal URL to invite testers in the browser.
+    pub direct_portal_url: String,
+    /// List of successfully invited or authorized emails.
+    pub testers: Vec<String>,
+    /// Status message or API feedback.
+    pub message: String,
 }
 
 /// Result of a single `quest ops agent` poll-and-execute cycle (`#13`).
@@ -762,13 +816,37 @@ impl FleetManager {
             },
             env,
         )?;
-        Ok(StoreUploadReceipt {
+        let channel = receipt
+            .channel
+            .clone()
+            .unwrap_or_else(|| req.channel.clone());
+        let build_id = receipt
+            .build_id
+            .clone()
+            .or_else(|| extract_build_id_from_stdout(&receipt.stdout));
+        let test_results_url = build_id.as_ref().map(|bid| {
+            format!(
+                "https://developer.oculus.com/manage/applications/{}/builds/{bid}/test-results/",
+                receipt.app_id
+            )
+        });
+        let invite_url = Some(format!(
+            "https://developer.oculus.com/manage/applications/{}/release-channels/{channel}/users",
+            receipt.app_id
+        ));
+
+        let store_receipt = StoreUploadReceipt {
             app_id: receipt.app_id,
-            channel: receipt.channel.unwrap_or_default(),
+            channel,
             apk_sha256: receipt.artifact_sha256.unwrap_or_default(),
             ovr_bin: receipt.ovr_bin,
             stdout: receipt.stdout,
-        })
+            build_id,
+            test_results_url,
+            invite_url,
+        };
+        let _ = save_latest_deployment(Path::new("."), &store_receipt);
+        Ok(store_receipt)
     }
 
     /// Executes any 1:1 `ovr-platform-util` Horizon Store operation.
@@ -936,16 +1014,257 @@ impl FleetManager {
             return Err(store_err(&err_msg));
         }
 
+        let parsed_build_id = req
+            .build_id
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .or_else(|| extract_build_id_from_stdout(&stdout_str));
+        let test_results_url = parsed_build_id.as_ref().map(|bid| {
+            format!(
+                "https://developer.oculus.com/manage/applications/{}/builds/{bid}/test-results/",
+                req.app_id.trim()
+            )
+        });
+        let invite_url = req.channel.as_ref().map(|ch| {
+            format!(
+                "https://developer.oculus.com/manage/applications/{}/release-channels/{}/users",
+                req.app_id.trim(),
+                ch.trim()
+            )
+        });
+
         Ok(OvrStoreReceipt {
             action: req.action,
             app_id: req.app_id.trim().to_string(),
             channel: req.channel.as_ref().map(|s| s.trim().to_string()),
-            build_id: req.build_id.as_ref().map(|s| s.trim().to_string()),
+            build_id: parsed_build_id,
             artifact_sha256,
             ovr_bin,
             stdout: stdout_str,
+            test_results_url,
+            invite_url,
         })
     }
+
+    /// Connects to a remote headset over wireless ADB TCP/IP (`QO-011`).
+    pub fn connect_wireless(target: &str, env: &OpsEnv) -> Result<String, OpsError> {
+        let trimmed = target.trim();
+        if trimmed.is_empty() {
+            return Err(OpsError::AdbFailed {
+                args: "connect".to_string(),
+                message: "missing wireless target host:port".to_string(),
+            });
+        }
+        let args = vec!["connect".to_string(), trimmed.to_string()];
+        let out = run_adb_checked(env, &args)?;
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    /// Pairs with a remote headset over wireless ADB pairing (`QO-012`).
+    pub fn pair_wireless(target: &str, code: &str, env: &OpsEnv) -> Result<String, OpsError> {
+        let trimmed_target = target.trim();
+        let trimmed_code = code.trim();
+        if trimmed_target.is_empty() || trimmed_code.is_empty() {
+            return Err(OpsError::AdbFailed {
+                args: "pair".to_string(),
+                message: "missing target host:port or pairing code".to_string(),
+            });
+        }
+        let args = vec![
+            "pair".to_string(),
+            trimmed_target.to_string(),
+            trimmed_code.to_string(),
+        ];
+        let out = run_adb_checked(env, &args)?;
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    /// Manages release channel testers via Meta Horizon Graph API and developer portal deep-links (`QO-013`).
+    pub fn manage_channel_testers(
+        req: &ChannelTesterRequest,
+        env: &OpsEnv,
+    ) -> Result<ChannelTesterReceipt, OpsError> {
+        let app_id = req.app_id.trim();
+        let channel = req.channel.trim();
+        let direct_portal_url = format!(
+            "https://developer.oculus.com/manage/applications/{app_id}/release-channels/{channel}/users"
+        );
+
+        match req.action {
+            ChannelTesterAction::DeepLink => Ok(ChannelTesterReceipt {
+                app_id: app_id.to_string(),
+                channel: channel.to_string(),
+                action: "deep-link".to_string(),
+                direct_portal_url: direct_portal_url.clone(),
+                testers: req.emails.clone(),
+                message: format!(
+                    "Direct Meta Developer Portal onboarding link: {direct_portal_url}"
+                ),
+            }),
+            ChannelTesterAction::Invite => {
+                if req.emails.is_empty() {
+                    return Ok(ChannelTesterReceipt {
+                        app_id: app_id.to_string(),
+                        channel: channel.to_string(),
+                        action: "invite".to_string(),
+                        direct_portal_url,
+                        testers: Vec::new(),
+                        message: "no tester emails specified".to_string(),
+                    });
+                }
+
+                match env {
+                    OpsEnv::Mock(_) => Ok(ChannelTesterReceipt {
+                        app_id: app_id.to_string(),
+                        channel: channel.to_string(),
+                        action: "invite".to_string(),
+                        direct_portal_url,
+                        testers: req.emails.clone(),
+                        message: format!(
+                            "Successfully invited {} testers to channel {}",
+                            req.emails.len(),
+                            channel
+                        ),
+                    }),
+                    OpsEnv::System => {
+                        let mut invited = Vec::new();
+                        let mut failed = Vec::new();
+                        for email in &req.emails {
+                            let url = format!(
+                                "https://graph.oculus.com/v1/{app_id}/release_channel_users"
+                            );
+                            let payload = serde_json::json!({
+                                "channel_name": channel,
+                                "user_email": email,
+                            });
+                            match env.post_json(MdmProvider::MetaHms, &url, &req.token, &payload) {
+                                Ok(_) => invited.push(email.clone()),
+                                Err(_) => failed.push(email.clone()),
+                            }
+                        }
+                        if failed.is_empty() {
+                            Ok(ChannelTesterReceipt {
+                                app_id: app_id.to_string(),
+                                channel: channel.to_string(),
+                                action: "invite".to_string(),
+                                direct_portal_url,
+                                testers: invited,
+                                message: "All tester invitations dispatched via Meta Graph API"
+                                    .to_string(),
+                            })
+                        } else {
+                            Ok(ChannelTesterReceipt {
+                                app_id: app_id.to_string(),
+                                channel: channel.to_string(),
+                                action: "invite".to_string(),
+                                direct_portal_url: direct_portal_url.clone(),
+                                testers: invited,
+                                message: format!(
+                                    "Invited {} testers directly. {} emails require Meta Org Admin privileges; add via: {}",
+                                    req.emails.len() - failed.len(),
+                                    failed.len(),
+                                    direct_portal_url
+                                ),
+                            })
+                        }
+                    }
+                }
+            }
+            ChannelTesterAction::List => match env {
+                OpsEnv::Mock(_) => Ok(ChannelTesterReceipt {
+                    app_id: app_id.to_string(),
+                    channel: channel.to_string(),
+                    action: "list".to_string(),
+                    direct_portal_url,
+                    testers: vec!["qa-tester1@example.com".to_string()],
+                    message: "Retrieved channel testers".to_string(),
+                }),
+                OpsEnv::System => {
+                    let url = format!(
+                        "https://graph.oculus.com/v1/{app_id}/release_channels?access_token={}",
+                        req.token
+                    );
+                    let testers = match ureq::get(&url).call() {
+                        Ok(resp) => {
+                            let raw = resp.into_string().unwrap_or_default();
+                            let parsed: serde_json::Value =
+                                serde_json::from_str(&raw).unwrap_or_default();
+                            parsed
+                                .get("data")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|item| {
+                                            item.get("email").or_else(|| item.get("name"))
+                                        })
+                                        .filter_map(|s| s.as_str().map(ToString::to_string))
+                                        .collect()
+                                })
+                                .unwrap_or_default()
+                        }
+                        Err(_) => Vec::new(),
+                    };
+                    Ok(ChannelTesterReceipt {
+                        app_id: app_id.to_string(),
+                        channel: channel.to_string(),
+                        action: "list".to_string(),
+                        direct_portal_url,
+                        testers,
+                        message: format!(
+                            "Channel {channel} testers retrieved (or view at direct portal URL)"
+                        ),
+                    })
+                }
+            },
+        }
+    }
+}
+
+/// Extracts a numerical Meta Horizon Build ID from `ovr-platform-util` stdout.
+#[must_use]
+pub fn extract_build_id_from_stdout(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let lower = line.to_ascii_lowercase();
+        if let Some(pos) = lower.find("build id") {
+            let rest = &line[pos + "build id".len()..];
+            let trimmed =
+                rest.trim_start_matches(|c: char| c == ':' || c == '=' || c.is_whitespace());
+            let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() {
+                return Some(digits);
+            }
+        }
+        if let Some(pos) = line.find("/builds/") {
+            let rest = &line[pos + "/builds/".len()..];
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() {
+                return Some(digits);
+            }
+        }
+    }
+    None
+}
+
+/// Persists a deployment receipt to `.questforge/deployments.json`.
+pub fn save_latest_deployment(
+    project_dir: &Path,
+    receipt: &StoreUploadReceipt,
+) -> Result<PathBuf, OpsError> {
+    let dir = project_dir.join(".questforge");
+    fs::create_dir_all(&dir).map_err(|source| OpsError::Io {
+        path: dir.clone(),
+        source,
+    })?;
+    let path = dir.join("deployments.json");
+    let payload = serde_json::to_string_pretty(receipt).map_err(|err| OpsError::Io {
+        path: path.clone(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()),
+    })?;
+    fs::write(&path, payload).map_err(|source| OpsError::Io {
+        path: path.clone(),
+        source,
+    })?;
+    Ok(path)
 }
 
 fn is_wsl_runtime() -> bool {

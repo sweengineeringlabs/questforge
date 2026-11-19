@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::{Cursor, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use questforge_config::QuestforgeConfig;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ pub enum ReportFormat {
 /// Individual policy check outcome.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicyFinding {
-    /// Rule identifier (`QV-001` .. `QV-009`).
+    /// Rule identifier (`QV-001` .. `QV-010`).
     pub id: String,
     /// Rule name.
     pub name: String,
@@ -328,6 +328,7 @@ impl ApkVerifier {
             check_uncompressed_resources(resources_arsc_compressed),
             check_horizon_sdk_loaders(&entries),
             check_backup_security(&manifest_text),
+            check_store_readiness(cfg.as_ref(), opts.project_dir.as_deref()),
         ];
 
         let score = compute_score(&findings);
@@ -622,6 +623,133 @@ fn check_backup_security(manifest: &str) -> PolicyFinding {
             details: "android:allowBackup is omitted (defaults to true); allows private app data backup".to_string(),
             remediation: Some("Explicitly add android:allowBackup=\"false\" to <application> in AndroidManifest.xml".to_string()),
         }
+    }
+}
+
+fn check_store_readiness(
+    cfg: Option<&QuestforgeConfig>,
+    project_dir: Option<&Path>,
+) -> PolicyFinding {
+    let store = cfg.and_then(|c| c.store.as_ref());
+    let base_dir = project_dir.unwrap_or_else(|| Path::new("."));
+
+    // 1. Verify privacy policy URL if configured
+    if let Some(store_cfg) = store {
+        if let Some(privacy) = &store_cfg.privacy_policy_url {
+            let trimmed = privacy.trim();
+            if !trimmed.is_empty() && !trimmed.starts_with("https://") {
+                return PolicyFinding {
+                    id: "QV-010".to_string(),
+                    name: "Store Submission Readiness".to_string(),
+                    status: RuleStatus::Fail,
+                    details: format!(
+                        "privacy_policy_url '{trimmed}' is insecure; Meta Horizon Store mandates https:// URLs"
+                    ),
+                    remediation: Some(
+                        "Update store.privacy_policy_url in quest_forge.yaml to start with https://"
+                            .to_string(),
+                    ),
+                };
+            }
+        }
+    }
+
+    // 2. Discover store assets directory
+    let assets_dir = store
+        .and_then(|s| s.assets_dir.as_ref().map(|d| base_dir.join(d)))
+        .or_else(|| {
+            let candidate = base_dir.join("store");
+            if candidate.is_dir() {
+                Some(candidate)
+            } else {
+                let candidate2 = base_dir.join(".questforge").join("store");
+                if candidate2.is_dir() {
+                    Some(candidate2)
+                } else {
+                    None
+                }
+            }
+        });
+
+    if let Some(dir) = assets_dir {
+        if dir.is_dir() {
+            let has_icon = dir.join("icon.png").is_file() || dir.join("icon.jpg").is_file();
+            let has_hero = dir.join("hero.png").is_file()
+                || dir.join("cover.png").is_file()
+                || dir.join("hero.jpg").is_file()
+                || dir.join("cover.jpg").is_file();
+
+            let screenshots_dir = dir.join("screenshots");
+            let screenshot_count = if screenshots_dir.is_dir() {
+                fs::read_dir(&screenshots_dir)
+                    .map(|entries| {
+                        entries
+                            .filter_map(|e| e.ok())
+                            .filter(|e| {
+                                e.path()
+                                    .extension()
+                                    .and_then(|ext| ext.to_str())
+                                    .is_some_and(|ext| {
+                                        ext.eq_ignore_ascii_case("png")
+                                            || ext.eq_ignore_ascii_case("jpg")
+                                    })
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+
+            let mut verified = Vec::new();
+            if has_icon {
+                verified.push("square icon (512x512)");
+            }
+            if has_hero {
+                verified.push("hero cover banner (2560x1440)");
+            }
+            if screenshot_count > 0 {
+                verified.push("screenshots");
+            }
+
+            if has_icon && has_hero {
+                return PolicyFinding {
+                    id: "QV-010".to_string(),
+                    name: "Store Submission Readiness".to_string(),
+                    status: RuleStatus::Pass,
+                    details: format!(
+                        "verified store assets in {}: {} ({} screenshots)",
+                        dir.display(),
+                        verified.join(", "),
+                        screenshot_count
+                    ),
+                    remediation: None,
+                };
+            }
+
+            return PolicyFinding {
+                id: "QV-010".to_string(),
+                name: "Store Submission Readiness".to_string(),
+                status: RuleStatus::Warn,
+                details: format!(
+                    "store directory {} missing required icon.png or hero/cover.png for App Lab / Store review",
+                    dir.display()
+                ),
+                remediation: Some(
+                    "Place icon.png (512x512) and hero.png (2560x1440) in your store assets directory"
+                        .to_string(),
+                ),
+            };
+        }
+    }
+
+    PolicyFinding {
+        id: "QV-010".to_string(),
+        name: "Store Submission Readiness".to_string(),
+        status: RuleStatus::Pass,
+        details: "store listing assets not configured; optional for private release channels (ALPHA/BETA)"
+            .to_string(),
+        remediation: None,
     }
 }
 

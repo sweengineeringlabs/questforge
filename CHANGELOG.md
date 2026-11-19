@@ -5,6 +5,15 @@ All notable changes to **QuestForge** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-11-19
+
+### Added
+- **Autonomous Release Channel Promotion (`AgentGoal::Promote`):** First-class `--goal promote` and `--channel <TARGET>` for `quest agent`, auto-resolving active builds from `get-release-channel-data` and `.questforge/deployments.json` and promoting builds across release tracks (`ALPHA` $\rightarrow$ `BETA` $\rightarrow$ `RC` $\rightarrow$ `PRODUCTION`) without recompiling or re-uploading binaries.
+- **Structured Release Receipts & Build Traceability:** Enhanced `StoreUploadReceipt` and `OvrStoreReceipt` with parsed `build_id`, direct Meta test results URLs (`test_results_url`), portal onboarding URLs (`invite_url`), and automatic deployment persistence to `.questforge/deployments.json`.
+- **Release Channel Tester Management & Deep-Linking:** Added `quest ops testers` and MCP tool `manage_channel_testers` supporting Meta Horizon Graph API tester invitations (`--action invite`), active tester listing (`--action list`), and one-click developer portal onboarding deep-links (`--action deep-link`).
+- **Store Submission Readiness Policy Rule (`QV-010`):** Added rule `QV-010` to `questforge-verify` to statically validate App Lab and public store review assets (512x512 icon, 2560x1440 hero banner, screenshots, HTTPS privacy policy, support URLs, and IARC content ratings).
+- **Wireless ADB Operations (`connect` & `pair`):** Added `quest ops connect` and `quest ops pair` along with the `fleet_connect` MCP tool for untethered headset discovery and APK deployment over Wi-Fi TCP/IP and Android 11+ pairing codes.
+
 ## [0.1.2] - 2026-11-19
 
 ### Added

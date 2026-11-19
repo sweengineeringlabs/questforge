@@ -5,8 +5,10 @@ use std::fs;
 use std::path::Path;
 
 use questforge_ops::{
-    AdbOutput, DeploymentRecord, FleetInventory, FleetManager, HmsReleaseRequest, MdmProvider,
-    MockOpsEnv, OpsEnv, OpsError, OvrStoreAction, OvrStoreRequest, StoreUploadRequest,
+    extract_build_id_from_stdout, save_latest_deployment, AdbOutput, ChannelTesterAction,
+    ChannelTesterRequest, DeploymentRecord, FleetInventory, FleetManager, HmsReleaseRequest,
+    MdmProvider, MockOpsEnv, OpsEnv, OpsError, OvrStoreAction, OvrStoreRequest, StoreUploadReceipt,
+    StoreUploadRequest,
 };
 use tempfile::TempDir;
 
@@ -366,4 +368,105 @@ fn test_execute_ovr_store_all_six_actions_happy() {
         let res = FleetManager::execute_ovr_store(&req, &env);
         assert!(matches!(res, Ok(ref r) if r.action == req.action));
     }
+}
+
+#[test]
+fn test_ops_wireless_connect_and_pair_happy() {
+    let mut responses = BTreeMap::new();
+    responses.insert(
+        "connect 192.168.1.50:5555".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"connected to 192.168.1.50:5555\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    responses.insert(
+        "pair 192.168.1.50:37123 123456".to_string(),
+        AdbOutput {
+            success: true,
+            stdout: b"Successfully paired to 192.168.1.50:37123\n".to_vec(),
+            stderr: String::new(),
+        },
+    );
+    let env = OpsEnv::Mock(MockOpsEnv {
+        responses,
+        ..Default::default()
+    });
+
+    let connect_res = FleetManager::connect_wireless("192.168.1.50:5555", &env);
+    assert!(matches!(connect_res, Ok(ref msg) if msg.contains("connected")));
+
+    let pair_res = FleetManager::pair_wireless("192.168.1.50:37123", "123456", &env);
+    assert!(matches!(pair_res, Ok(ref msg) if msg.contains("Successfully paired")));
+}
+
+#[test]
+fn test_ops_channel_testers_invite_list_deeplink_happy() {
+    let env = OpsEnv::Mock(MockOpsEnv::default());
+
+    let invite = FleetManager::manage_channel_testers(
+        &ChannelTesterRequest {
+            app_id: "1439257382612621".to_string(),
+            channel: "ALPHA".to_string(),
+            token: "secret".to_string(),
+            action: ChannelTesterAction::Invite,
+            emails: vec!["tester@example.com".to_string()],
+        },
+        &env,
+    );
+    assert!(matches!(
+        invite,
+        Ok(ref r)
+            if r.testers.len() == 1
+                && r.direct_portal_url.contains("release-channels/ALPHA/users")
+    ));
+
+    let deeplink = FleetManager::manage_channel_testers(
+        &ChannelTesterRequest {
+            app_id: "1439257382612621".to_string(),
+            channel: "BETA".to_string(),
+            token: "secret".to_string(),
+            action: ChannelTesterAction::DeepLink,
+            emails: Vec::new(),
+        },
+        &env,
+    );
+    assert!(matches!(
+        deeplink,
+        Ok(ref r) if r.direct_portal_url.contains("release-channels/BETA/users")
+    ));
+}
+
+#[test]
+fn test_ops_extract_build_id_and_save_deployments_happy() {
+    let stdout = "Build uploaded successfully.\nBuild ID: 1440416305830062\nDone.";
+    let extracted = extract_build_id_from_stdout(stdout);
+    assert_eq!(extracted.as_deref(), Some("1440416305830062"));
+
+    let Ok(dir) = TempDir::new() else {
+        panic!("tempdir");
+    };
+    let receipt = StoreUploadReceipt {
+        app_id: "1439257382612621".to_string(),
+        channel: "ALPHA".to_string(),
+        apk_sha256: "deadbeef".to_string(),
+        ovr_bin: std::path::PathBuf::from("ovr-platform-util.exe"),
+        stdout: stdout.to_string(),
+        build_id: extracted,
+        test_results_url: Some(
+            "https://developer.oculus.com/manage/applications/1439257382612621/builds/1440416305830062/test-results/".to_string()
+        ),
+        invite_url: Some(
+            "https://developer.oculus.com/manage/applications/1439257382612621/release-channels/ALPHA/users".to_string()
+        ),
+    };
+
+    let path = save_latest_deployment(dir.path(), &receipt);
+    assert!(matches!(path, Ok(ref p) if p.is_file()));
+    let Ok(read_back) = fs::read_to_string(dir.path().join(".questforge").join("deployments.json"))
+    else {
+        panic!("failed to read deployments.json");
+    };
+    assert!(read_back.contains("1440416305830062"));
 }

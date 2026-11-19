@@ -26,6 +26,8 @@ pub enum AgentGoal {
     Deploy,
     /// Release + discover connected QA lab headsets via `fleet_discover`.
     FleetRelease,
+    /// Validate and promote active build to a target release channel (`ovr_store` set-release-channel-build).
+    Promote,
 }
 
 /// Role profile for [`QuestXrAgent`] workflows (`docs/0-ideation/concept.md`).
@@ -107,9 +109,11 @@ impl AgentRole {
                 "verify_release",
                 "analyze_build_failure",
                 "fleet_discover",
+                "fleet_connect",
                 "publish_mdm",
                 "upload_store",
                 "ovr_store",
+                "manage_channel_testers",
                 "check_source",
                 "search_docs",
             ],
@@ -142,6 +146,8 @@ pub struct AgentOptions {
     pub release_version: String,
     /// Autonomous goal to achieve.
     pub goal: AgentGoal,
+    /// Target release channel for `Promote` goal (defaults to `"BETA"`).
+    pub target_channel: Option<String>,
     /// If true, passes `dry_run: true` to `build_project` and skips `verify_release` if no APK exists.
     pub dry_run: bool,
 }
@@ -643,6 +649,33 @@ impl QuestXrAgent {
                 json!({ "group": "qa-lab" }),
             )?;
             if !fleet_ok {
+                return Ok(AgentRunReport {
+                    goal: opts.goal,
+                    discovered_tools,
+                    steps,
+                    verify_score,
+                    passed: false,
+                });
+            }
+        }
+
+        // 6. Optional channel promotion (`ovr_store` set-release-channel-build) when goal is Promote.
+        if opts.goal == AgentGoal::Promote {
+            let target_channel = opts
+                .target_channel
+                .clone()
+                .unwrap_or_else(|| "BETA".to_string());
+            let (promote_ok, _) = call_mcp_tool(
+                rpc,
+                &mut steps,
+                "ovr_store",
+                json!({
+                    "action": "set-release-channel-build",
+                    "project_dir": opts.project_dir.display().to_string(),
+                    "channel": target_channel,
+                }),
+            )?;
+            if !promote_ok {
                 return Ok(AgentRunReport {
                     goal: opts.goal,
                     discovered_tools,
