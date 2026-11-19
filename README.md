@@ -26,31 +26,13 @@ Building for **Meta Quest** shouldn't mean wrestling with OpenXR permissions, br
 
 ## Quick Start
 
-### Windows (PowerShell)
+1. **Install** the latest binary (Windows, macOS, or Linux / WSL) from [GitHub Releases](https://github.com/sweengineeringlabs/questforge/releases/latest).
+2. **Follow the [Runbook & Playbook](docs/6-operations/runbook.md)** for full setup, or jump straight in:
 
 ```pwsh
-# 1. Download and extract quest.exe from GitHub Releases
-Invoke-WebRequest -Uri "https://github.com/sweengineeringlabs/questforge/releases/latest/download/quest-x86_64-pc-windows-msvc.zip" -OutFile quest.zip
-Expand-Archive -Path quest.zip -DestinationPath . -Force
-
-# 2. Authenticate and run a role-based XR agent
-.\quest.exe auth --provider gemini
-.\quest.exe agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
+quest auth --provider gemini
+quest agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
 ```
-
-### Linux & WSL (Bash)
-
-```bash
-# 1. Download and extract quest from GitHub Releases
-curl -fsSL https://github.com/sweengineeringlabs/questforge/releases/latest/download/quest-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-chmod +x ./quest
-
-# 2. Authenticate and run a role-based XR agent
-./quest auth --provider gemini
-./quest agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
-```
-
-See the **[Runbook & Playbook](docs/6-operations/runbook.md)** and **[Developer Guide](docs/4-development/developer_guide.md)** for full Windows and Linux / WSL workflows.
 
 ---
 
