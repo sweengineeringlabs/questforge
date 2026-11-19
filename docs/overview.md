@@ -13,9 +13,14 @@
 - [Showcase App (`orbit-pulse-vr`)](../examples/orbit-pulse-vr/quest_forge.yaml) — Native OpenXR VR showcase with hand tracking, passthrough, spatial anchors, and 120 Hz support
 
 ### Architecture & Workflows
-- [Architecture](3-design/architecture.md) — System layers, AI/MCP agent flow, and Horizon OS / MDM integration
-- [Workflows (All Actors)](3-design/developer_workflow.md) — End-to-end Mermaid workflows
-- [Mobile & Emulator Integration](3-design/mobile-emulator-integration.md) — Device and emulator integration design
+- [Architecture](3-design/architecture.md) — System layers, AI/MCP agent flow, WSL interop, and persistence schema
+- [Role Workflows Index](3-design/workflow/README.md) — Multi-role ecosystem overview
+  - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen
+  - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 14-tool MCP agent workflow
+  - [Platform Workflow (`--role platform`)](3-design/workflow/platform.md) — CI/CD orchestration, zero-trust toolchains, and failure diagnostics
+  - [QA & Release Workflow (`--role qa`)](3-design/workflow/qa.md) — `100/100` VRC verification, lab headset rollout, and Horizon Store uploads
+  - [Enterprise Workflow (`--role enterprise`)](3-design/workflow/enterprise.md) — Control plane governance, RBAC, and Meta HMS / MDM distribution
+- [Mobile & Emulator Integration](3-design/mobile-emulator-integration.md) — Device and emulator verification boundary
 
 ### Product & Specifications
 - [Product Concept & Audiences](0-ideation/concept.md) — Target audiences, positioning, and engine roadmap

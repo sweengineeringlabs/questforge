@@ -93,5 +93,5 @@ metaquest/
 
 ### See Also
 - [Architecture](../3-design/architecture.md)
-- [Workflows (All Actors)](../3-design/developer_workflow.md)
+- [Role Workflows](../3-design/workflow/README.md) ([Studio](../3-design/workflow/studio.md) · [Developer](../3-design/workflow/developer.md) · [Platform](../3-design/workflow/platform.md) · [QA](../3-design/workflow/qa.md) · [Enterprise](../3-design/workflow/enterprise.md))
 - [Operations Runbook](../6-operations/runbook.md)
