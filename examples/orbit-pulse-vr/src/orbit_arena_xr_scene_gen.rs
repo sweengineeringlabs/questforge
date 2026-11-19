@@ -10,6 +10,8 @@ pub trait OrbitArenaXrActions {
     fn on_wave_started(&mut self);
     /// Invoked when `arena_anchor` is activated.
     fn on_anchor_locked(&mut self);
+    /// Invoked when `wave_gesture` is activated.
+    fn on_wave_gesture_detected(&mut self);
     /// Invoked when `toggle_passthrough` is activated.
     fn on_toggle_passthrough(&mut self);
     /// Invoked when `reset_match` is activated.
@@ -47,12 +49,27 @@ impl OrbitArenaXrScene {
                 handler.on_anchor_locked();
                 true
             }
+            "wave_gesture" => {
+                handler.on_wave_gesture_detected();
+                true
+            }
             "toggle_passthrough" => {
                 handler.on_toggle_passthrough();
                 true
             }
             "reset_match" => {
                 handler.on_reset_match();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Dispatches a recognized hand gesture name (e.g. "wave", "pinch") to `handler`.
+    pub fn dispatch_gesture<H: OrbitArenaXrActions>(gesture: &str, handler: &mut H) -> bool {
+        match gesture {
+            "wave" => {
+                handler.on_wave_gesture_detected();
                 true
             }
             _ => false,

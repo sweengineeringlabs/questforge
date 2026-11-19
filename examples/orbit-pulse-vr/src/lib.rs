@@ -8,5 +8,81 @@ pub mod orbit_arena_actions;
 pub mod orbit_arena_xr_scene_gen;
 pub mod questforge_bootstrap_gen;
 
-pub use self::orbit_arena_actions::{OrbitArenaGame, WavePhase};
+pub use self::orbit_arena_actions::{OpenXrHandWaveDetector, OrbitArenaGame, WavePhase};
 pub use self::orbit_arena_xr_scene_gen::{OrbitArenaXrActions, OrbitArenaXrScene};
+
+use std::sync::Mutex;
+
+static GLOBAL_GAME: Mutex<Option<OrbitArenaGame>> = Mutex::new(None);
+
+/// Native JNI interface: initialize game state.
+#[no_mangle]
+pub extern "system" fn Java_com_swelabs_orbitpulsevr_MainActivity_nativeInitGame() {
+    let mut lock = GLOBAL_GAME.lock().unwrap_or_else(|e| e.into_inner());
+    let mut game = OrbitArenaGame::new();
+    OrbitArenaXrScene::dispatch_action("launch_pad", &mut game);
+    *lock = Some(game);
+}
+
+/// Native JNI interface: dispatch action by ID or code.
+/// 1 = pulse_orb, 2 = shield_emitter, 3 = launch_pad, 4 = wave_gesture, 5 = reset_match
+#[no_mangle]
+pub extern "system" fn Java_com_swelabs_orbitpulsevr_MainActivity_nativeDispatchAction(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+    action_code: i32,
+) -> i32 {
+    let mut lock = GLOBAL_GAME.lock().unwrap_or_else(|e| e.into_inner());
+    if lock.is_none() {
+        let mut g = OrbitArenaGame::new();
+        OrbitArenaXrScene::dispatch_action("launch_pad", &mut g);
+        *lock = Some(g);
+    }
+    if let Some(ref mut game) = *lock {
+        match action_code {
+            1 => {
+                OrbitArenaXrScene::dispatch_action("pulse_orb", game);
+            }
+            2 => {
+                OrbitArenaXrScene::dispatch_action("shield_emitter", game);
+            }
+            3 => {
+                OrbitArenaXrScene::dispatch_action("launch_pad", game);
+            }
+            4 => {
+                OrbitArenaXrScene::dispatch_action("wave_gesture", game);
+            }
+            5 => {
+                OrbitArenaXrScene::dispatch_action("reset_match", game);
+            }
+            _ => {}
+        }
+        game.score as i32
+    } else {
+        0
+    }
+}
+
+/// Native JNI interface: trigger recognized hand gesture (1 = wave).
+/// Returns updated score.
+#[no_mangle]
+pub extern "system" fn Java_com_swelabs_orbitpulsevr_MainActivity_nativeOnGesture(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+    gesture_id: i32,
+) -> i32 {
+    let mut lock = GLOBAL_GAME.lock().unwrap_or_else(|e| e.into_inner());
+    if lock.is_none() {
+        let mut g = OrbitArenaGame::new();
+        OrbitArenaXrScene::dispatch_action("launch_pad", &mut g);
+        *lock = Some(g);
+    }
+    if let Some(ref mut game) = *lock {
+        if gesture_id == 1 {
+            OrbitArenaXrScene::dispatch_gesture("wave", game);
+        }
+        game.score as i32
+    } else {
+        0
+    }
+}

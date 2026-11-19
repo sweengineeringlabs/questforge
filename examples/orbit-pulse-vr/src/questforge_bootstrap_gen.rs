@@ -70,7 +70,7 @@ pub fn run_frame_step<F: FnMut(f32)>(predicted_display_period_ns: i64, mut step:
 /// Creates an OpenXR `openxr::Instance` on Meta Horizon OS (`aarch64-linux-android`).
 #[cfg(target_os = "android")]
 pub fn create_android_openxr_instance() -> Result<openxr::Instance, String> {
-    let entry = openxr::Entry::load().map_err(|e| e.to_string())?;
+    let entry = unsafe { openxr::Entry::load() }.map_err(|e| e.to_string())?;
     let mut exts = openxr::ExtensionSet::default();
     exts.khr_android_create_instance = true;
     if HAND_TRACKING_ENABLED {
@@ -87,6 +87,7 @@ pub fn create_android_openxr_instance() -> Result<openxr::Instance, String> {
                 application_version: 1,
                 engine_name: "QuestForge",
                 engine_version: 1,
+                api_version: openxr::Version::new(1, 0, 0),
             },
             &exts,
             &[],

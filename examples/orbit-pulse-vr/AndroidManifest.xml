@@ -6,11 +6,12 @@
     <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />
     <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
     <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.proximity" android:required="false" />
     <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />
     <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
     <application android:label="orbit-pulse-vr" android:debuggable="false">
         <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|quest3|quest3s|questpro" />
-        <activity android:name="com.unity3d.player.UnityPlayerActivity"
+        <activity android:name="com.swelabs.orbitpulsevr.MainActivity"
             android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>

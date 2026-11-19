@@ -4,3 +4,4 @@ dist/
 *.aab
 *.html
 *.json
+android/bin/

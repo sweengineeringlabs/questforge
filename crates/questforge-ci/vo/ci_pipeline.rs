@@ -225,7 +225,7 @@ impl CiOrchestrator {
                     log_excerpt: tail_lines(&out.stderr, &out.stdout, 20),
                 });
             }
-            if cfg.project.engine == EngineKind::Rust && !apk_path.exists() {
+            if cfg.project.engine == EngineKind::Rust {
                 package_rust_apk(&opts.project_dir, &cfg, &apk_path)?;
             }
             if !apk_path.exists() {
@@ -415,6 +415,8 @@ fn package_rust_apk(
         .collect();
     let native_lib_bytes = find_compiled_rust_cdylib(project_dir, &lib_stem)
         .unwrap_or_else(|| b"\x7fELF\x02\x01\x01\x00".to_vec());
+    let dex_bytes =
+        find_compiled_classes_dex(project_dir).unwrap_or_else(|| b"dex\n035\0".to_vec());
 
     let file = fs::File::create(apk_path).map_err(|source| CiError::Io {
         path: apk_path.to_path_buf(),
@@ -423,10 +425,17 @@ fn package_rust_apk(
     let mut zip = ZipWriter::new(file);
     let opts = SimpleFileOptions::default();
 
-    let entries: Vec<(String, Vec<u8>)> = vec![
+    let mut entries: Vec<(String, Vec<u8>)> = vec![
         ("AndroidManifest.xml".to_string(), manifest_bytes),
-        ("classes.dex".to_string(), b"dex\n035\0".to_vec()),
+        ("classes.dex".to_string(), dex_bytes),
         (format!("lib/arm64-v8a/lib{lib_stem}.so"), native_lib_bytes),
+    ];
+
+    if let Some(arsc) = find_compiled_resources_arsc(project_dir) {
+        entries.push(("resources.arsc".to_string(), arsc));
+    }
+
+    entries.extend(vec![
         (
             "META-INF/MANIFEST.MF".to_string(),
             b"Manifest-Version: 1.0\nCreated-By: QuestForge\n".to_vec(),
@@ -436,7 +445,7 @@ fn package_rust_apk(
             b"Signature-Version: 1.0\n".to_vec(),
         ),
         ("META-INF/QUESTFORGE.RSA".to_string(), b"PKCS7".to_vec()),
-    ];
+    ]);
 
     for (name, data) in entries {
         zip.start_file(name, opts).map_err(|err| CiError::Io {
@@ -458,13 +467,56 @@ fn package_rust_apk(
 }
 
 fn find_compiled_rust_cdylib(project_dir: &Path, lib_stem: &str) -> Option<Vec<u8>> {
-    let candidates = [
+    let mut candidates = vec![
         project_dir.join(format!(
             "target/aarch64-linux-android/release/lib{lib_stem}.so"
         )),
         project_dir.join(format!("target/release/lib{lib_stem}.so")),
         project_dir.join(format!("target/release/{lib_stem}.dll")),
         project_dir.join(format!("target/release/lib{lib_stem}.dylib")),
+    ];
+    if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
+        candidates.push(
+            PathBuf::from(target_dir)
+                .join(format!("aarch64-linux-android/release/lib{lib_stem}.so")),
+        );
+    }
+    if let Some(user_home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        candidates.push(
+            PathBuf::from(user_home)
+                .join(".cargo/target")
+                .join(format!("aarch64-linux-android/release/lib{lib_stem}.so")),
+        );
+    }
+    for path in candidates {
+        if let Ok(bytes) = fs::read(path) {
+            return Some(bytes);
+        }
+    }
+    None
+}
+
+fn find_compiled_classes_dex(project_dir: &Path) -> Option<Vec<u8>> {
+    let candidates = [
+        project_dir.join("classes.dex"),
+        project_dir.join("android").join("classes.dex"),
+        project_dir.join("target").join("classes.dex"),
+        project_dir.join("dist").join("classes.dex"),
+    ];
+    for path in candidates {
+        if let Ok(bytes) = fs::read(path) {
+            return Some(bytes);
+        }
+    }
+    None
+}
+
+fn find_compiled_resources_arsc(project_dir: &Path) -> Option<Vec<u8>> {
+    let candidates = [
+        project_dir.join("resources.arsc"),
+        project_dir.join("android").join("resources.arsc"),
+        project_dir.join("target").join("resources.arsc"),
+        project_dir.join("dist").join("resources.arsc"),
     ];
     for path in candidates {
         if let Ok(bytes) = fs::read(path) {

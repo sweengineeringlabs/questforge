@@ -23,6 +23,12 @@ interactables:
     two_handed: false
     haptic_intensity: 40
     on_activate: OnAnchorLocked
+  - id: wave_gesture
+    kind: hand_gesture
+    gesture: wave
+    two_handed: false
+    haptic_intensity: 70
+    on_activate: OnWaveGestureDetected
 spatial_panels:
   - id: mission_hud
     title: "Orbit Pulse HUD"

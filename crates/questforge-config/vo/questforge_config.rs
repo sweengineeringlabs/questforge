@@ -352,6 +352,8 @@ pub enum InteractableKind {
     RayPanel,
     /// World-locked persistent spatial anchor.
     SpatialAnchor,
+    /// 3D or sensor-based hand gesture detector (e.g. wave, pinch, poke, palm-open).
+    HandGesture,
 }
 
 /// Declarative 3D interactable definition in `specs/*_xr.yaml`.
@@ -361,6 +363,9 @@ pub struct InteractableSpec {
     pub id: String,
     /// Interaction primitive kind.
     pub kind: InteractableKind,
+    /// Specific gesture kind when `kind == HandGesture` (e.g. `wave`, `pinch`, `open_palm`).
+    #[serde(default)]
+    pub gesture: Option<String>,
     /// Allow simultaneous two-handed manipulation.
     #[serde(default)]
     pub two_handed: bool,
