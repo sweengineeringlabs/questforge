@@ -12,6 +12,7 @@
 - [Component & Layer Diagram](#component--layer-diagram)
 - [End-to-End Data Flow (Code → Horizon OS → Meta Horizon Store & HMS)](#end-to-end-data-flow-code--horizon-os--meta-horizon-store--hms)
 - [Stratified Input Architecture & Hexagonal Gesture Layer](#stratified-input-architecture--hexagonal-gesture-layer)
+- [Stratified Configuration & Resolution Architecture (Three-Tier Resolution Pattern)](#stratified-configuration--resolution-architecture-three-tier-resolution-pattern)
 - [AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)](#ai--llm-agent-interaction-flow-quest-agent--quest-mcp)
 - [Cross-Platform & WSL Interop Architecture](#cross-platform--wsl-interop-architecture)
 - [Control Plane & Persistence Schema (`questforge-server`)](#control-plane--persistence-schema-questforge-server)
@@ -118,6 +119,42 @@ flowchart TD
 1. **Zero-Hardware Evaluation:** Hackathon evaluators and developers without a Meta Quest headset can physically wave a hand over any standard Android phone's IR proximity sensor to test gesture mechanics hands-free.
 2. **Headless Cloud CI:** Cloud runners (GitHub Actions) execute synthetic gesture verification in headless Android AVDs (`mobile-emulator`) without human touch or physical optical camera rigs.
 3. **Enterprise Dual-Surface Mode:** The exact same release APK operates seamlessly as an immersive 6DoF spatial VR application on Quest or as a 2D supervisor / companion kiosk screen on mobile devices without maintaining divergent codebases.
+
+## Stratified Configuration & Resolution Architecture (Three-Tier Resolution Pattern)
+
+Across all CLI entrypoints (`quest ops`, `quest ci`, `quest serve`, `quest auth`, `quest check`, `quest sync`) and Model Context Protocol (MCP) agent tools, QuestForge enforces a unified **Three-Tier Resolution Pattern**. This architecture eliminates repetitive CLI flag overhead for developers, facilitates automated zero-flag execution in CI/CD pipelines, and prevents credentials or tenant IDs from being hardcoded in tracked repositories.
+
+```mermaid
+flowchart TD
+    Invoke["Invocation Target (CLI Command / MCP Tool Call)"] --> T1{"Tier 1: Explicit CLI / Tool Flag"}
+    T1 -- "Present" --> Resolved["Resolved Value (Highest Precedence)"]
+    T1 -- "Omitted" --> T2{"Tier 2: Environment Variable"}
+    T2 -- "Set" --> Resolved
+    T2 -- "Unset" --> T3{"Tier 3: Declarative Manifest / Context Fallback"}
+    T3 -- "Configured / Default" --> Resolved
+    T3 -- "Missing" --> Gate{"Validation Gate (Required Parameter?)"}
+    Gate -- "Yes (Required)" --> Halt["HALT: Actionable Error Message\n(Displays remediation options for Tiers 1, 2, and 3)"]
+    Gate -- "No (Optional)" --> SafeDefault["Apply Safe Contextual Default"]
+```
+
+### Universal Parameter Resolution Matrix Across All Commands
+
+| Target Parameter | Tier 1: CLI / Tool Flag | Tier 2: Environment Variable | Tier 3: Manifest / Safe Fallback | Failure Mode (When Unresolved) | Commands & Tools Utilizing Pattern |
+|---|---|---|---|---|---|
+| **Meta Horizon App ID** | `--app-id <ID>` | `$env:QUEST_META_APP_ID` | `mdm.app_id` in `quest_forge.yaml` | Halts with missing App ID error and resolution paths | `quest ops store-upload`, `quest ops store`, `quest ci`, `quest ops hms-push`, `upload_store`, `ovr_store`, `publish_mdm` |
+| **Meta App Secret** | `--app-secret-env <ENV>` | `$env:QUEST_META_APP_SECRET` | None (Zero-Trust Anti-Leakage Gate) | Halts with missing Meta App Secret error | `quest ops store-upload`, `quest ops store`, `upload_store`, `ovr_store` |
+| **Enterprise MDM Token** | `--token-env <ENV>` | `$env:QUESTFORGE_MDM_TOKEN` | `mdm.token_env` in `quest_forge.yaml` | Halts with missing MDM bearer token error | `quest ops hms-push`, `publish_mdm` |
+| **Store Release Channel** | `--channel <CH>` | N/A | `mdm.channel` or default `ALPHA` / `PRODUCTION` | Applies default release channel | `quest ops store-upload`, `quest ops store`, `quest ci`, `quest ops hms-push`, `ovr_store` |
+| **Project Context Root** | `--project-dir <DIR>` | `$env:QUESTFORGE_PROJECT_DIR` | Current working directory (`.`) | Halts with `missing .\quest_forge.yaml` (`QD-001`) | `quest check`, `quest sync`, `quest doctor`, `quest init`, `quest verify`, `quest ci`, `quest agent` |
+| **Control Plane Database** | `--database-url <URL>` | `$env:QUESTFORGE_DATABASE_URL` | Volatile In-Memory `Arc<RwLock<ControlPlaneState>>` | Graceful fallback to volatile memory | `quest serve` |
+| **Control Plane RBAC Auth** | `--jwt-secret <SECRET>` | `$env:QUESTFORGE_JWT_SECRET` | DevHeader Mode (`X-Quest-Role`) | Graceful fallback to developer header mode | `quest serve` |
+| **AI / LLM Credentials** | `--auth` / `--provider` | Caching (`gcloud`, `~/.codex/`, `~/.claude/`) | `$env:<PROVIDER>_API_KEY` $\rightarrow$ Interactive Prompt | Halts with provider authentication error | `quest auth`, `quest agent` |
+| **Release Keystore Signing** | `--project-dir <DIR>` | `$env:QUEST_KEYSTORE_PATH`, `$env:QUEST_KEY_ALIAS` | `signing.keystore_env`, `signing.alias_env` in manifest | Halts in strict CI build or emits warning (`QD-008`) | `quest ci`, `quest doctor --strict` |
+
+### Architectural Invariants:
+1. **Explicit Beats Implicit:** CLI flags explicitly provided at invocation always supersede environment variables and configuration files.
+2. **Zero-Trust Credential Isolation:** Secrets (`QUEST_META_APP_SECRET`, MDM bearer tokens, JWT secrets, LLM keys) are never persisted in declarative YAML manifests checked into version control.
+3. **Fail-Fast Early Gate:** If a mandatory parameter (such as `--app-id` during a store upload or CI publish) cannot be resolved across all three tiers, the CLI fails fast at the command validation layer with an actionable error before triggering any external sub-processes (`ovr-platform-util`, Gradle, Cargo, or network calls).
 
 ## AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)
 
