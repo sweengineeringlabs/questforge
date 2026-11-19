@@ -310,6 +310,12 @@ pub struct OvrStoreRequest {
     pub dlc_sku: Option<String>,
     /// Optional release notes.
     pub release_notes: Option<String>,
+    /// Optional target age group (`TEENS_AND_ADULTS`, `MIXED_AGES`, `CHILDREN`).
+    pub age_group: Option<String>,
+    /// Wait for Meta automated test postprocessing before exiting.
+    pub wait_for_postprocessing: bool,
+    /// Upload build as draft.
+    pub draft: bool,
     /// Optional explicit path to `ovr-platform-util`.
     pub ovr_bin: Option<PathBuf>,
 }
@@ -346,6 +352,12 @@ pub struct StoreUploadRequest {
     pub channel: String,
     /// Optional release notes attached to the channel upload.
     pub release_notes: Option<String>,
+    /// Optional target age group (`TEENS_AND_ADULTS`, `MIXED_AGES`, `CHILDREN`).
+    pub age_group: Option<String>,
+    /// Wait for Meta automated test postprocessing before exiting.
+    pub wait_for_postprocessing: bool,
+    /// Upload build as draft.
+    pub draft: bool,
     /// Optional explicit path to `ovr-platform-util`.
     pub ovr_bin: Option<PathBuf>,
 }
@@ -743,6 +755,9 @@ impl FleetManager {
                 dir_path: None,
                 dlc_sku: None,
                 release_notes: req.release_notes.clone(),
+                age_group: req.age_group.clone(),
+                wait_for_postprocessing: req.wait_for_postprocessing,
+                draft: req.draft,
                 ovr_bin: req.ovr_bin.clone(),
             },
             env,
@@ -837,6 +852,15 @@ impl FleetManager {
                     .filter(|n| !n.trim().is_empty())
                 {
                     args.extend(["--notes".to_string(), notes.trim().to_string()]);
+                }
+                if let Some(age_group) = req.age_group.as_deref().filter(|g| !g.trim().is_empty()) {
+                    args.extend(["--age-group".to_string(), age_group.trim().to_string()]);
+                }
+                if req.wait_for_postprocessing {
+                    args.push("--wait-for-postprocessing".to_string());
+                }
+                if req.draft {
+                    args.push("--draft".to_string());
                 }
             }
             OvrStoreAction::DownloadQuestBuild => {

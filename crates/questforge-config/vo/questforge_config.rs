@@ -44,6 +44,9 @@ pub struct QuestforgeConfig {
     /// Release signing environment variable names.
     #[serde(default)]
     pub signing: SigningConfig,
+    /// Declarative Meta Horizon Store publishing settings.
+    #[serde(default)]
+    pub store: Option<StoreConfig>,
 }
 
 /// Project identity and game engine metadata.
@@ -304,6 +307,37 @@ impl Default for SigningConfig {
         Self {
             keystore_env: DEFAULT_KEYSTORE_ENV.to_string(),
             alias_env: DEFAULT_ALIAS_ENV.to_string(),
+        }
+    }
+}
+
+/// Declarative Meta Horizon Store publishing settings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StoreConfig {
+    /// Meta Horizon Application ID (e.g. `"1439257382612621"`).
+    pub app_id: Option<String>,
+    /// Default release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`).
+    pub default_channel: String,
+    /// Target age group (`TEENS_AND_ADULTS`, `MIXED_AGES`, `CHILDREN`).
+    pub age_group: Option<String>,
+    /// Release notes or template.
+    pub release_notes: Option<String>,
+    /// Wait for Meta automated test postprocessing before exiting.
+    pub wait_for_postprocessing: bool,
+    /// Upload build as draft.
+    pub draft: bool,
+}
+
+impl Default for StoreConfig {
+    fn default() -> Self {
+        Self {
+            app_id: None,
+            default_channel: "ALPHA".to_string(),
+            age_group: Some("TEENS_AND_ADULTS".to_string()),
+            release_notes: None,
+            wait_for_postprocessing: false,
+            draft: false,
         }
     }
 }

@@ -850,6 +850,15 @@ fn call_upload_store(workspace_root: &Path, args: &Value) -> Result<String, Stri
         .get("notes")
         .and_then(|v| v.as_str())
         .map(ToString::to_string);
+    let age_group = args
+        .get("age_group")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string);
+    let wait_for_postprocessing = args
+        .get("wait_for_postprocessing")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let draft = args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
     let ovr_bin = args
         .get("ovr_bin")
         .and_then(|v| v.as_str())
@@ -862,6 +871,9 @@ fn call_upload_store(workspace_root: &Path, args: &Value) -> Result<String, Stri
             apk_path,
             channel,
             release_notes,
+            age_group,
+            wait_for_postprocessing,
+            draft,
             ovr_bin,
         },
         &OpsEnv::System,
@@ -924,6 +936,15 @@ fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String>
                 .get("notes")
                 .and_then(|v| v.as_str())
                 .map(ToString::to_string),
+            age_group: args
+                .get("age_group")
+                .and_then(|v| v.as_str())
+                .map(ToString::to_string),
+            wait_for_postprocessing: args
+                .get("wait_for_postprocessing")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            draft: args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false),
             ovr_bin: args
                 .get("ovr_bin")
                 .and_then(|v| v.as_str())

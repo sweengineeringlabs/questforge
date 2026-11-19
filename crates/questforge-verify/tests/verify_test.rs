@@ -28,6 +28,13 @@ fn write_test_apk(path: &PathBuf, manifest: &str, signed: bool, arm64: bool) {
                 .start_file("lib/arm64-v8a/libunity.so", SimpleFileOptions::default())
                 .is_ok());
             assert!(w.write_all(b"\x7fELF").is_ok());
+            assert!(w
+                .start_file(
+                    "lib/arm64-v8a/libopenxr_loader.so",
+                    SimpleFileOptions::default()
+                )
+                .is_ok());
+            assert!(w.write_all(b"\x7fELF").is_ok());
         } else {
             assert!(w
                 .start_file("lib/armeabi-v7a/libunity.so", SimpleFileOptions::default())

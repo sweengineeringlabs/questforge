@@ -290,6 +290,7 @@ impl ApkVerifier {
 
         let mut entries = Vec::with_capacity(archive.len());
         let mut manifest_bytes = Vec::new();
+        let mut resources_arsc_compressed = false;
         for idx in 0..archive.len() {
             let mut file = archive
                 .by_index(idx)
@@ -298,6 +299,9 @@ impl ApkVerifier {
                     message: err.to_string(),
                 })?;
             let name = file.name().to_string();
+            if name == "resources.arsc" && file.compression() != zip::CompressionMethod::Stored {
+                resources_arsc_compressed = true;
+            }
             if name == "AndroidManifest.xml" {
                 file.read_to_end(&mut manifest_bytes)
                     .map_err(|source| VerifyError::Io {
@@ -321,6 +325,8 @@ impl ApkVerifier {
                 apk_size_bytes,
                 opts.max_apk_bytes.unwrap_or(MAX_SINGLE_APK_BYTES),
             ),
+            check_uncompressed_resources(resources_arsc_compressed),
+            check_horizon_sdk_loaders(&entries),
         ];
 
         let score = compute_score(&findings);
@@ -522,6 +528,64 @@ fn check_apk_size(size_bytes: u64, max_bytes: u64) -> PolicyFinding {
             status: RuleStatus::Fail,
             details: format!("{size_bytes} bytes exceeds {max_bytes} byte limit"),
             remediation: Some("Split large assets into OBB/Addressables".to_string()),
+        }
+    }
+}
+
+fn check_uncompressed_resources(is_compressed: bool) -> PolicyFinding {
+    if is_compressed {
+        PolicyFinding {
+            id: "QV-007".to_string(),
+            name: "Uncompressed Resources Check".to_string(),
+            status: RuleStatus::Fail,
+            details: "resources.arsc is compressed in the APK (forbidden by Android 11+ and Meta Horizon Store)".to_string(),
+            remediation: Some("Package resources.arsc with compression level 0 (ZIP_STORED) and 4-byte align via zipalign".to_string()),
+        }
+    } else {
+        PolicyFinding {
+            id: "QV-007".to_string(),
+            name: "Uncompressed Resources Check".to_string(),
+            status: RuleStatus::Pass,
+            details: "resources.arsc is stored uncompressed (ZIP_STORED) for direct memory mapping"
+                .to_string(),
+            remediation: None,
+        }
+    }
+}
+
+fn check_horizon_sdk_loaders(entries: &[String]) -> PolicyFinding {
+    let has_openxr = entries
+        .iter()
+        .any(|e| e == "lib/arm64-v8a/libopenxr_loader.so");
+    let has_platform = entries
+        .iter()
+        .any(|e| e == "lib/arm64-v8a/libovrplatformloader.so");
+
+    if has_openxr || has_platform {
+        let loaders: Vec<&str> = [
+            has_openxr.then_some("libopenxr_loader.so"),
+            has_platform.then_some("libovrplatformloader.so"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        PolicyFinding {
+            id: "QV-008".to_string(),
+            name: "Meta Horizon / OpenXR SDK Detection".to_string(),
+            status: RuleStatus::Pass,
+            details: format!(
+                "native VR loaders detected in arm64-v8a: {}",
+                loaders.join(", ")
+            ),
+            remediation: None,
+        }
+    } else {
+        PolicyFinding {
+            id: "QV-008".to_string(),
+            name: "Meta Horizon / OpenXR SDK Detection".to_string(),
+            status: RuleStatus::Warn,
+            details: "libopenxr_loader.so or libovrplatformloader.so not found in lib/arm64-v8a/".to_string(),
+            remediation: Some("Bundle libopenxr_loader.so or libovrplatformloader.so in lib/arm64-v8a/ to satisfy Meta store ingestion".to_string()),
         }
     }
 }

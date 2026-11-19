@@ -32,3 +32,9 @@ xr_features:
 signing:
   keystore_env: QUEST_KEYSTORE_PATH
   alias_env: QUEST_KEY_ALIAS
+store:
+  app_id: "1439257382612621" # Or set QUEST_META_APP_ID in your environment
+  default_channel: ALPHA
+  age_group: TEENS_AND_ADULTS # Options: TEENS_AND_ADULTS | MIXED_AGES | CHILDREN
+  release_notes: "Release v0.1.2: Orbit Pulse VR for Meta Quest"
+  wait_for_postprocessing: false

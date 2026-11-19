@@ -127,6 +127,7 @@ impl ProjectScaffolder {
             xr_features: XrFeaturesConfig::default(),
             mdm: None,
             signing: SigningConfig::default(),
+            store: None,
         };
 
         let yaml = serde_yaml::to_string(&cfg)?;

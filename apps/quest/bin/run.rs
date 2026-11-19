@@ -476,7 +476,7 @@ enum OpsAction {
         /// Meta Horizon App ID (e.g. `1439257382612621`, or QUEST_META_APP_ID env)
         #[arg(long)]
         app_id: Option<String>,
-        /// Optional directory containing quest_forge.yaml to resolve mdm.app_id
+        /// Optional directory containing quest_forge.yaml to resolve store settings or mdm.app_id
         #[arg(long)]
         project_dir: Option<PathBuf>,
         /// Path to the signed `.apk`
@@ -491,6 +491,15 @@ enum OpsAction {
         /// Optional release notes
         #[arg(long)]
         notes: Option<String>,
+        /// Target age group (`TEENS_AND_ADULTS`, `MIXED_AGES`, `CHILDREN`)
+        #[arg(long)]
+        age_group: Option<String>,
+        /// Wait for Meta automated test postprocessing before exiting
+        #[arg(long, default_value_t = false)]
+        wait_for_postprocessing: bool,
+        /// Upload build as draft
+        #[arg(long, default_value_t = false)]
+        draft: bool,
         /// Optional explicit path to `ovr-platform-util`
         #[arg(long)]
         ovr_bin: Option<PathBuf>,
@@ -503,7 +512,7 @@ enum OpsAction {
         /// Meta Horizon App ID (required for all actions except `version`, or QUEST_META_APP_ID env)
         #[arg(long)]
         app_id: Option<String>,
-        /// Optional directory containing quest_forge.yaml to resolve mdm.app_id
+        /// Optional directory containing quest_forge.yaml to resolve store settings or mdm.app_id
         #[arg(long)]
         project_dir: Option<PathBuf>,
         /// Optional APK path (`upload-quest-build`)
@@ -1562,29 +1571,72 @@ fn run_ops(args: OpsArgs) -> ExitCode {
             channel,
             app_secret_env,
             notes,
+            age_group,
+            wait_for_postprocessing,
+            draft,
             ovr_bin,
         } => {
+            let cfg = project_dir
+                .as_deref()
+                .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok());
             let resolved_app_id = app_id
                 .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
                 .or_else(|| {
-                    project_dir
-                        .as_deref()
-                        .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
-                        .and_then(|cfg| cfg.mdm)
-                        .map(|m| m.app_id)
+                    cfg.as_ref()
+                        .and_then(|c| c.store.as_ref())
+                        .and_then(|s| s.app_id.clone())
+                })
+                .or_else(|| {
+                    cfg.as_ref()
+                        .and_then(|c| c.mdm.as_ref())
+                        .map(|m| m.app_id.clone())
                 })
                 .unwrap_or_default();
             if resolved_app_id.trim().is_empty() {
-                eprintln!("quest ops store-upload failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
+                eprintln!("quest ops store-upload failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure store.app_id in quest_forge.yaml)");
                 return ExitCode::FAILURE;
             }
+            let resolved_channel = if channel == "ALPHA" {
+                cfg.as_ref()
+                    .and_then(|c| c.store.as_ref())
+                    .map(|s| s.default_channel.clone())
+                    .unwrap_or(channel)
+            } else {
+                channel
+            };
+            let resolved_age_group = age_group.or_else(|| {
+                cfg.as_ref()
+                    .and_then(|c| c.store.as_ref())
+                    .and_then(|s| s.age_group.clone())
+            });
+            let resolved_notes = notes.or_else(|| {
+                cfg.as_ref()
+                    .and_then(|c| c.store.as_ref())
+                    .and_then(|s| s.release_notes.clone())
+            });
+            let resolved_wait = wait_for_postprocessing
+                || cfg
+                    .as_ref()
+                    .and_then(|c| c.store.as_ref())
+                    .map(|s| s.wait_for_postprocessing)
+                    .unwrap_or(false);
+            let resolved_draft = draft
+                || cfg
+                    .as_ref()
+                    .and_then(|c| c.store.as_ref())
+                    .map(|s| s.draft)
+                    .unwrap_or(false);
+
             let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
             let req = StoreUploadRequest {
                 app_id: resolved_app_id,
                 app_secret,
                 apk_path: apk,
-                channel,
-                release_notes: notes,
+                channel: resolved_channel,
+                release_notes: resolved_notes,
+                age_group: resolved_age_group,
+                wait_for_postprocessing: resolved_wait,
+                draft: resolved_draft,
                 ovr_bin,
             };
             match FleetManager::upload_to_store(&req, &env) {
@@ -1627,12 +1679,15 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                     project_dir
                         .as_deref()
                         .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
-                        .and_then(|cfg| cfg.mdm)
-                        .map(|m| m.app_id)
+                        .and_then(|cfg| {
+                            cfg.store
+                                .and_then(|s| s.app_id)
+                                .or_else(|| cfg.mdm.map(|m| m.app_id))
+                        })
                 })
                 .unwrap_or_default();
             if action != CliOvrStoreAction::Version && resolved_app_id.trim().is_empty() {
-                eprintln!("quest ops store failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
+                eprintln!("quest ops store failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure store.app_id in quest_forge.yaml)");
                 return ExitCode::FAILURE;
             }
             let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
@@ -1646,6 +1701,9 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                 dir_path: dir,
                 dlc_sku: sku,
                 release_notes: notes,
+                age_group: None,
+                wait_for_postprocessing: false,
+                draft: false,
                 ovr_bin,
             };
             match FleetManager::execute_ovr_store(&req, &env) {
