@@ -1,6 +1,15 @@
 # Developer & AI Agent Workflow (`--role developer`)
 
+**Audience**: AI-native XR creators, IDE coding agent authors, and QuestForge MCP integrators
+
 **Target Persona:** AI-Native XR Creators and IDE coding assistants (Cursor, Claude Code, VS Code MCP clients, or `quest agent --role developer`) orchestrating all 14 QuestForge tools over JSON-RPC 2.0 (`quest mcp`).
+
+---
+
+## Table of Contents
+
+- [1. AI Agent ReAct & MCP Sequence](#1-ai-agent-react--mcp-sequence)
+- [2. Role-Scoped MCP Tool Matrix (14 Tools)](#2-role-scoped-mcp-tool-matrix-14-tools)
 
 ---
 
@@ -39,15 +48,15 @@ sequenceDiagram
 
 ## 2. Role-Scoped MCP Tool Matrix (14 Tools)
 
-`quest agent --role <role>` filters the MCP tools exposed to the LLM so each role operates within its domain boundary, while `--role developer` exposes the full 14-tool surface:
+`quest agent --role <role>` filters and prioritizes the MCP tools exposed to the LLM (`AgentRole::preferred_tools`) so each role operates within its domain boundary, while `--role developer` exposes the full 14-tool surface:
 
 ```mermaid
 flowchart LR
     subgraph Roles["Agent Roles (--role)"]
-        Studio["studio (11 tools)"]
-        Platform["platform (8 tools)"]
-        QA["qa (11 tools)"]
-        Enterprise["enterprise (7 tools)"]
+        Studio["studio (8 preferred tools)"]
+        Platform["platform (7 preferred tools)"]
+        QA["qa (11 preferred tools)"]
+        Enterprise["enterprise (7 preferred tools)"]
         Developer["developer (All 14 tools)"]
     end
 
@@ -55,13 +64,13 @@ flowchart LR
         Authoring["init_project, sync_project, check_source"]
         Toolchain["setup_toolchain, doctor_check, search_docs"]
         Build["build_project, generate_pipeline, analyze_build_failure"]
-        Release["verify_release, fleet_discover, store_upload, ovr_store, publish_mdm"]
+        Release["verify_release, fleet_discover, upload_store, ovr_store, publish_mdm"]
     end
 
     Studio --> Authoring & Toolchain & Build & Release
-    Platform --> Toolchain & Build
+    Platform --> Authoring & Toolchain & Build
     QA --> Authoring & Toolchain & Build & Release
-    Enterprise --> Toolchain & Release
+    Enterprise --> Authoring & Toolchain & Build & Release
     Developer --> Authoring & Toolchain & Build & Release
 ```
 
@@ -79,5 +88,5 @@ flowchart LR
 | `fleet_discover` | Discovers connected Quest headsets or emulators over `adb` |
 | `publish_mdm` | Publishes verified APKs to Meta HMS (`graph.oculus.com`), ManageXR (`managexrapi.com`), or ArborXR (`api.xrdm.app`) |
 | `setup_toolchain` | Provisions and SHA-256-verifies `adb`, `cmdline-tools`, and `ovr-platform-util` (`quest setup`) |
-| `store_upload` | Uploads a verified `.apk` to a Meta Horizon Store release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`) |
+| `upload_store` | Uploads a signed `.apk` to a Meta Horizon Store release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`) |
 | `ovr_store` | 1:1 `ovr-platform-util` Horizon Store control (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`) |

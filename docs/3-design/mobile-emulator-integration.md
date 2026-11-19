@@ -1,7 +1,18 @@
 # Mobile Emulator Integration Plan (`mobile-emulator`)
 
+**Audience**: Platform engineers, QA leads, and QuestForge contributors
+
 **Related Issue:** `#6`  
 **Reference:** `../mobile-emulator` (`docs/3-design/architecture.md`, `docs/3-design/adr/0018-android-emulator-for-ci-and-local-dev.md`)
+
+---
+
+## Table of Contents
+
+- [1. Evaluation: What `mobile-emulator` Already Provides](#1-evaluation-what-mobile-emulator-already-provides)
+- [2. Verification Boundary for QuestForge](#2-verification-boundary-for-questforge)
+- [3. Required Enhancements for QuestForge Reuse](#3-required-enhancements-for-questforge-reuse)
+- [4. Follow-Up Links](#4-follow-up-links)
 
 ---
 

@@ -1,6 +1,16 @@
 # QA & Release Workflow (`--role qa`)
 
+**Audience**: XR QA engineers, release managers, and lab fleet operators
+
 **Target Persona:** XR QA & Release Managers auditing `0–100` Meta Horizon VRC scorecards, autonomously remediating manifest/sync drift (`sync_project` → `build_project` → `verify_release`), deploying candidate APKs to lab headset fleets, and promoting verified builds to Meta Horizon Store release channels.
+
+---
+
+## Table of Contents
+
+- [1. QA Release Readiness State Machine](#1-qa-release-readiness-state-machine)
+- [2. QA Fleet Validation & Horizon Store Promotion Flow](#2-qa-fleet-validation--horizon-store-promotion-flow)
+- [3. Autonomous QA Agent Remediation & Store Upload Sequence](#3-autonomous-qa-agent-remediation--store-upload-sequence)
 
 ---
 

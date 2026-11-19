@@ -1,5 +1,20 @@
 # QuestForge Architecture
 
+**Audience**: Architects, technical leads, platform engineers, security reviewers, and QuestForge contributors
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Stakeholders & Concerns](#stakeholders--concerns)
+- [Component & Layer Diagram](#component--layer-diagram)
+- [End-to-End Data Flow (Code → Horizon OS → Meta Horizon Store & HMS)](#end-to-end-data-flow-code--horizon-os--meta-horizon-store--hms)
+- [AI / LLM Agent Interaction Flow (`quest agent` ↔ `quest mcp`)](#ai--llm-agent-interaction-flow-quest-agent--quest-mcp)
+- [Cross-Platform & WSL Interop Architecture](#cross-platform--wsl-interop-architecture)
+- [Control Plane & Persistence Schema (`questforge-server`)](#control-plane--persistence-schema-questforge-server)
+- [Layer Responsibilities](#layer-responsibilities)
+- [Integration Points](#integration-points)
+- [See Also](#see-also)
+
 ## Overview
 
 QuestForge is organized under **`swartch` Architecture 4.0** as an 11-package Rust workspace (`1.100.0`) paired with a `machineweb` (`mweb`) TypeScript frontend (`web/`). It separates domain contracts (`api`), cohesive domain libraries (`lib`), the CLI binary (`bin`), and external execution targets (Unity, Unreal, Native Rust OpenXR, ADB QA fleets, Meta Horizon Store, and Meta HMS/MDMs).
@@ -113,42 +128,39 @@ flowchart TD
 
 ```mermaid
 erDiagram
-    PROJECTS ||--o{ BUILDS : produces
-    PROJECTS ||--o{ VERIFY_REPORTS : audits
-    BUILDS ||--o{ VERIFY_REPORTS : validates
-    BUILDS ||--o{ DEPLOYMENTS : rolls_out
+    QUESTFORGE_PROJECTS ||--o{ QUESTFORGE_BUILDS : produces
+    QUESTFORGE_PROJECTS ||--o{ QUESTFORGE_REPORTS : audits
+    QUESTFORGE_BUILDS ||--o{ QUESTFORGE_DEPLOYMENTS : rolls_out
 
-    PROJECTS {
-        string id PK
-        string name
-        string package_id
-        string engine
+    QUESTFORGE_PROJECTS {
+        text id PK
+        text name
+        text repository
+        text owner
     }
-    BUILDS {
-        string id PK
-        string project_id FK
-        string version
-        string apk_sha256
-        string sbom_path
+    QUESTFORGE_BUILDS {
+        text id PK
+        text project_id FK
+        text status
+        text version
     }
-    VERIFY_REPORTS {
-        string id PK
-        string project_id FK
-        int score
+    QUESTFORGE_REPORTS {
+        text id PK
+        smallint score
         boolean ready
-        json checks
     }
-    DEPLOYMENTS {
-        string id PK
-        string device_group
-        string apk_path
-        string status
+    QUESTFORGE_DEPLOYMENTS {
+        text id PK
+        text target
+        text apk_path
+        text status
     }
-    AUDIT_LOG {
-        string id PK
-        string actor_role
-        string action
-        string timestamp
+    QUESTFORGE_AUDIT_LOG {
+        bigserial seq PK
+        text role
+        text method
+        text path
+        integer status_code
     }
 ```
 
@@ -166,6 +178,13 @@ erDiagram
 | System | Integration | Purpose |
 |---|---|---|
 | **Meta Horizon OS OpenXR** | Generated `XR_FB_*` / `XR_EXT_*` extensions + `AndroidManifest.xml` | 72/90/120 Hz, Passthrough, Hand Tracking, Foveation, Spatial Anchors |
-| **Meta Horizon Store** | `ovr-platform-util upload-quest-build` (`quest ci`) | Automated store channel promotion |
-| **Meta HMS / ManageXR / ArborXR** | HTTPS JSON push (`quest ops hms-push` via `mdm:` in `quest_forge.yaml`) | Enterprise OTA kiosk distribution (`graph.oculus.com`, `managexrapi.com`, `api.xrdm.app`) |
-| **PostgreSQL** | `PostgresStore` (`quest serve --database-url`) | Persistent projects, builds, reports, deployments, audit log |
+| **Meta Horizon Store** | `ovr-platform-util` (`quest ops store`, `quest ops store-upload`, `ovr_store`, `upload_store`, `quest ci`) | Automated store channel upload, download, and promotion (`ALPHA` → `PRODUCTION`) |
+| **Meta HMS / ManageXR / ArborXR** | HTTPS JSON push (`quest ops hms-push` / `publish_mdm` via `mdm:` in `quest_forge.yaml`) | Enterprise OTA kiosk distribution (`graph.oculus.com`, `managexrapi.com`, `api.xrdm.app`) |
+| **PostgreSQL** | `PostgresStore` (`quest serve --database-url`) | Persistent `questforge_projects`, `questforge_builds`, `questforge_reports`, `questforge_deployments`, `questforge_audit_log` |
+
+## See Also
+
+- [Architecture Compliance Checklist](compliance/compliance_checklist.md)
+- [Architecture Decision Records (`3-design/adr/`)](adr/README.md)
+- [Role Workflows (`3-design/workflow/`)](workflow/README.md)
+- [Documentation Hub (`docs/README.md`)](../README.md)

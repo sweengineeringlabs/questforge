@@ -1,6 +1,16 @@
 # Studio Workflow (`--role studio`)
 
+**Audience**: XR Game Studios and Unity / Unreal / Native Rust OpenXR developers
+
 **Target Persona:** XR Game Studios building for Meta Quest with **Unity (`engine: unity`)**, **Unreal Engine (`engine: unreal`)**, or **Native Rust OpenXR (`engine: rust`)**.
+
+---
+
+## Table of Contents
+
+- [1. Studio Inner-Loop Flow](#1-studio-inner-loop-flow)
+- [2. Declarative XR Codegen Architecture (`quest sync` & `quest check`)](#2-declarative-xr-codegen-architecture-quest-sync--quest-check)
+- [3. End-to-End Studio Sequence](#3-end-to-end-studio-sequence)
 
 ---
 

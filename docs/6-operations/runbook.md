@@ -1,6 +1,19 @@
 # QuestForge Operations Runbook
 
-Operational procedures for running the QuestForge control plane, `machineweb` (`mweb`) dashboard, lab fleet agent, and end-to-end verification.
+**Audience**: Platform & DevOps Engineers, XR QA & Release Managers, and Enterprise Lab Operations Leads
+
+> **TLDR**: Operational procedures for installing `quest` on Windows and Linux / WSL, building and verifying the workspace and `machineweb` (`mweb`) dashboard, running the `quest serve` Control Plane (in-memory or PostgreSQL + HS256 JWT), operating lab headset fleets (`quest ops`), pushing verified builds to Meta Horizon Store (`quest ops store`) and enterprise MDMs (`quest ops hms-push`), and troubleshooting common errors.
+
+---
+
+## Table of Contents
+
+- [1. Prerequisites & Installation](#1-prerequisites--installation)
+- [2. Build & Verify Locally](#2-build--verify-locally)
+- [3. Running the Control Plane (`quest serve`)](#3-running-the-control-plane-quest-serve)
+- [4. End-to-End Smoke Verification (`scripts/e2e-demo.ps1`)](#4-end-to-end-smoke-verification-scriptse2e-demops1)
+- [5. Running the Lab Fleet Agent & Enterprise MDM Push (`quest ops`)](#5-running-the-lab-fleet-agent--enterprise-mdm-push-quest-ops)
+- [6. Troubleshooting](#6-troubleshooting)
 
 ---
 
@@ -191,3 +204,13 @@ quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk
 | `404` on `POST /api/reports` | Write endpoint for verification scorecards is `POST /api/verify` | Post verification results to `POST /api/verify`; read via `GET /api/reports` |
 | `native TypeScript is missing` in `mweb check` | Dependencies not installed in `web/` | Run `bun install` inside `web/` |
 | `MissingChecksum` in `quest setup` | Zero-trust policy requires SHA-256 | Provide `--adb-sha256` / `--ovr-sha256` (or `quest_forge.yaml` `*_sha256` fields) |
+
+---
+
+## See Also
+
+- [Documentation Hub (`docs/README.md`)](../README.md)
+- [Quick Start Guide](../quickstart.md)
+- [Architecture](../3-design/architecture.md)
+- [Role Workflows](../3-design/workflow/README.md)
+- [Developer Guide](../4-development/developer_guide.md)

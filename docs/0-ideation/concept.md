@@ -1,5 +1,15 @@
 # QuestForge — Product Concept & Target Audiences
 
+**Audience**: Product leads, XR studio directors, enterprise buyers, and QuestForge contributors
+
+## Table of Contents
+
+- [Concept Summary](#concept-summary)
+- [Value Proposition](#value-proposition)
+- [Target Audiences](#target-audiences)
+- [Product Packaging & Positioning](#product-packaging--positioning)
+- [Supported Engines & Roadmap](#supported-engines--roadmap)
+
 ## Concept Summary
 
 **QuestForge** is the **DevSecOps and Release Engineering Platform for Meta Quest and Meta Horizon OS**—the missing automation, verification, and governance layer between Unity/Unreal source code and the Meta Horizon Store or enterprise MDM systems.

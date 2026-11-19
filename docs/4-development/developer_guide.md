@@ -1,6 +1,23 @@
 # QuestForge Developer Guide
 
+**Audience**: XR Application Developers building Meta Quest apps (`unity`, `unreal`, `rust`) and Platform Contributors developing QuestForge itself
+
 Guide for **XR Application Developers** building Meta Quest apps and **Platform Contributors** developing QuestForge itself.
+
+---
+
+## Table of Contents
+
+- [Part 1: XR Application Developers (`unity` | `unreal` | `rust`)](#part-1-xr-application-developers-unity--unreal--rust)
+  - [1. Scaffold & Sync Declarative XR Projects](#1-scaffold--sync-declarative-xr-projects)
+  - [2. Static Checks, Toolchain Setup & Diagnostics](#2-static-checks-toolchain-setup--diagnostics)
+  - [3. Build, SBOM & Store Verification](#3-build-sbom--store-verification)
+  - [4. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)](#4-showcase-app-examplesorbit-pulse-vr--enterprise-mdm-quest_forgeyaml-mdm)
+  - [5. AI Agents & Provider Auth (`quest auth` & `quest agent`)](#5-ai-agents--provider-auth-quest-auth--quest-agent)
+- [Part 2: QuestForge Contributors](#part-2-questforge-contributors)
+  - [Workspace Structure (`swartch` Architecture 4.0)](#workspace-structure-swartch-architecture-40)
+  - [Key Conventions](#key-conventions)
+  - [See Also](#see-also)
 
 ---
 

@@ -1,9 +1,24 @@
 # QuestForge — Phase 1 MVP Specification
 
-**Version:** 1.0 (Draft)  
-**Scope:** Phase 1 Foundation (`setup-metavr`, `quest-doctor`, `quest-init`, and shared `quest_forge.yaml`)  
+**Audience**: Platform engineers, CLI contributors, and technical leads
+
+> **TLDR**: Phase 1 MVP specification for QuestForge (`quest setup`, `quest doctor`, `quest init`, and `quest_forge.yaml`), establishing zero-trust toolchain provisioning, workstation diagnostics (`QD-001`..`QD-009`), and standardized repository scaffolding under `swartch` Architecture 4.0.
+
+**Version:** 1.0 (Implemented)  
+**Scope:** Phase 1 Foundation (`setup-metavr` / `quest setup`, `quest-doctor` / `quest doctor`, `quest-init` / `quest init`, and shared `quest_forge.yaml`)  
 **Toolchain:** Rust `1.100.0`, Bun `1.4.2` (latest stable), `swartch` CLI (Architecture 4.0 auditor, scaffolder, and remediator)  
-**Status:** Actionable MVP Spec (Zero-Backend CLI + GitHub Action)
+**Status:** Implemented in `quest` v0.1
+
+---
+
+## Table of Contents
+
+- [1. Phase 1 Objectives & Non-Goals](#1-phase-1-objectives--non-goals)
+- [2. Packaging & CI Strategy](#2-packaging--ci-strategy)
+- [3. Shared Project Manifest (`quest_forge.yaml`)](#3-shared-project-manifest-quest_forgeyaml)
+- [4. Component 1: `setup-metavr` (`quest setup`)](#4-component-1-setup-metavr-cli-provisioner--github-action)
+- [5. Component 2: `quest-doctor` (`quest doctor`)](#5-component-2-quest-doctor-environment-validator)
+- [6. Component 3: `quest-init` (`quest init`)](#6-component-3-quest-init-project-scaffolder)
 
 ---
 

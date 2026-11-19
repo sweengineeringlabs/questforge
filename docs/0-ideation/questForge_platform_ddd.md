@@ -1,9 +1,23 @@
 # QuestForge Platform
+
+**Audience**: Architects, domain modellers, and platform engineers
+
+> **TLDR**: Comprehensive Domain-Driven Design (DDD), product vision, use cases, bounded contexts, and architecture specification for the QuestForge Meta Quest and Meta Horizon OS DevSecOps ecosystem (`quest setup`, `quest doctor`, `quest init`, `quest sync`, `quest check`, `quest ci`, `quest verify`, `quest mcp`, `quest agent`, `quest ops`, and `quest serve`).
+
 ## Unified Product Vision, SRS, Use Cases, and Design Document
 ### Meta Quest / Meta Horizon OS DevOps & Developer Productivity Ecosystem
 
 **Version:** 1.0  
 **Author:** Amu
+
+---
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Product Vision](#product-vision)
+- [Design Principles](#design-principles)
+- [Domain-Driven Design (DDD) & Bounded Contexts](#domain-driven-design-ddd)
 
 ---
 

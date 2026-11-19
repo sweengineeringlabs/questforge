@@ -1,6 +1,10 @@
 # QuestForge — Overview & Documentation Index
 
+**Audience**: All QuestForge users, XR developers, platform engineers, QA leads, and contributors
+
 **QuestForge** puts role-based AI agents (`studio`, `enterprise`, `platform`, `qa`, `developer`) in charge of the Meta Quest and Meta Horizon OS development and release lifecycle.
+
+> See the main **[Documentation Hub (`docs/README.md`)](README.md)** for the complete W³H overview.
 
 ---
 
@@ -14,6 +18,8 @@
 
 ### Architecture & Workflows
 - [Architecture](3-design/architecture.md) — System layers, AI/MCP agent flow, WSL interop, and persistence schema
+- [Architecture Compliance Checklist](3-design/compliance/compliance_checklist.md) — Enforceable `swartch` Architecture 4.0 checklist
+- [Architecture Decision Records](3-design/adr/README.md) — Recorded architectural decisions
 - [Role Workflows Index](3-design/workflow/README.md) — Multi-role ecosystem overview
   - [Studio Workflow (`--role studio`)](3-design/workflow/studio.md) — XR game studio inner-loop and declarative OpenXR codegen
   - [Developer Workflow (`--role developer`)](3-design/workflow/developer.md) — AI-native creator & 14-tool MCP agent workflow
@@ -27,3 +33,4 @@
 - [Platform Domain-Driven Design (DDD)](0-ideation/questForge_platform_ddd.md) — Domain model and bounded contexts
 - [Platform SRS](0-ideation/questForge_platform_srs.md) — Software requirements specification
 - [Phase 1 MVP Spec](0-ideation/questforge_phase1_mvp_spec.md) — Initial MVP scope and gates
+- [Glossary](glossary.md) — Domain terminology and acronyms

@@ -37,4 +37,4 @@ Every person on a VR team has different priorities. QuestForge adapts to your ro
 Ready to try QuestForge?
 
 - **[Quick Start Guide](docs/quickstart.md)** — Install QuestForge on Windows or Linux / WSL, connect your AI provider, and launch your first agent in minutes.
-- **[Overview & Documentation](docs/overview.md)** — Explore the full product concept, architecture, workflows, developer guide, and operations runbook.
+- **[Overview & Documentation](docs/README.md)** — Explore the full product concept, architecture, workflows, developer guide, and operations runbook.

@@ -1,10 +1,25 @@
 # Software Requirements Specification (SRS)
 
+**Audience**: Product managers, systems engineers, QA leads, and QuestForge contributors
+
+> **TLDR**: Software Requirements Specification (SRS) defining stakeholders, system architecture, functional requirements (`QD-001`..`QD-009`, `QV-001`..`QV-006`, `QO-001`..`QO-010`, `MCP-001`..`MCP-008`), non-functional requirements, and security controls for the QuestForge Meta Quest DevOps Platform Suite.
+
 # Meta Quest DevOps Platform Suite
 
 Version: 1.0
 
 Author: Amu
+
+---
+
+## Table of Contents
+
+- [1. Executive Summary](#1-executive-summary)
+- [2. Product Vision](#2-product-vision)
+- [3. Stakeholders](#3-stakeholders)
+- [4. System Architecture](#4-system-architecture)
+
+---
 
 ## 1. Executive Summary
 

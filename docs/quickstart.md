@@ -1,6 +1,18 @@
 # QuestForge Quick Start
 
+**Audience**: All QuestForge users, XR developers, platform engineers, and QA leads
+
 Get up and running with **QuestForge** on **Windows** or **Linux / WSL**.
+
+---
+
+## Table of Contents
+
+- [1. Install `quest`](#1-install-quest)
+  - [Windows (PowerShell)](#windows-powershell)
+  - [Linux & WSL (Bash)](#linux--wsl-bash)
+- [2. Authenticate & Launch Your AI Agent](#2-authenticate--launch-your-ai-agent)
+- [3. Next Steps](#3-next-steps)
 
 ---
 
@@ -46,4 +58,4 @@ chmod +x ./quest
 
 - **[Developer Guide](4-development/developer_guide.md)** — Scaffold (`quest init`), sync (`quest sync`), and verify (`quest check`, `quest verify`) XR projects
 - **[Operations Runbook](6-operations/runbook.md)** — Control plane (`quest serve`), lab headset fleet (`quest ops`), and Meta Horizon Store uploads (`quest ops store`)
-- **[Overview & Documentation Index](overview.md)** — Architecture, workflows, and specifications
+- **[Documentation Hub](README.md)** — Architecture, role workflows, specifications, and glossary
