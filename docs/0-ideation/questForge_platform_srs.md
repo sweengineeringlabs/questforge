@@ -69,35 +69,13 @@ Goals:
 
 Meta Quest DevOps Platform Suite
 
-```text
-+---------------------------------------------------+
-| Quest Developer Workstation                       |
-+---------------------------------------------------+
-                    |
-                    v
-+---------------------------------------------------+
-| Quest Init / Quest Doctor / MetaVR CLI            |
-+---------------------------------------------------+
-                    |
-                    v
-+---------------------------------------------------+
-| GitHub Actions / Azure DevOps / Jenkins           |
-+---------------------------------------------------+
-                    |
-                    v
-+---------------------------------------------------+
-| Quest Build Services                              |
-+---------------------------------------------------+
-                    |
-                    v
-+---------------------------------------------------+
-| QuestOps Fleet Management                         |
-+---------------------------------------------------+
-                    |
-                    v
-+---------------------------------------------------+
-| Quest Headsets & Horizon Store                    |
-+---------------------------------------------------+
+```mermaid
+flowchart TD
+    A["Quest Developer Workstation"] --> B["Quest Init / Quest Doctor / MetaVR CLI (quest setup)"]
+    B --> C["GitHub Actions / Azure DevOps / Jenkins (quest ci)"]
+    C --> D["Quest Build & VRC Verification Services (quest verify)"]
+    D --> E["QuestOps Fleet Management (quest ops)"]
+    E --> F["Quest Headsets, Horizon Store & Enterprise MDM"]
 ```
 
 ---

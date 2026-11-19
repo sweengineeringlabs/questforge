@@ -17,6 +17,26 @@
 
 ## 2. Verification Boundary for QuestForge
 
+```mermaid
+flowchart LR
+    subgraph Layer1["1. Static & Binary Verification (Zero Hardware)"]
+        Check["quest check (QF-SPEC / SYNC / VRC / OXR / PERF)"]
+        Verify["quest verify (QV-001..QV-006 APK + VRC + ARM64 + Signatures)"]
+    end
+
+    subgraph Layer2["2. Headless AVD Harness (mobile-emulator)"]
+        AVD["Android 32/34 AVD (SELinux Enforcing)"]
+        AdbOps["quest ops (QD-007 discover, deploy, rollback, logcat, screenshot)"]
+    end
+
+    subgraph Layer3["3. Horizon OS Runtime & Hardware"]
+        Sim["Meta XR Simulator (XR_RUNTIME_JSON)"]
+        Headset["Physical Meta Quest 2 / Pro / 3 / 3S Fleet"]
+    end
+
+    Check --> Verify --> AVD --> AdbOps --> Sim --> Headset
+```
+
 | Verification Surface | Covered By | Notes |
 |---|---|---|
 | `adb` discovery (`QD-007`), `install`/rollback (`QO-004`, `QO-005`), `logcat` (`QO-006`), `screencap` (`QO-007`), SELinux `Enforcing` | **`mobile-emulator` AVD** | Real `adb` transport and Android package manager without physical hardware |

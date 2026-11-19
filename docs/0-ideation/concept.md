@@ -6,6 +6,30 @@
 
 It unifies project scaffolding, zero-trust toolchain provisioning, environment diagnostics, CI/CD build orchestration, static APK/VRC compliance verification, MCP AI-agent tooling, lab fleet operations, and a hosted control plane into a single Rust CLI (`quest`) and `machineweb` (`mweb`) web dashboard.
 
+```mermaid
+flowchart LR
+    subgraph Roles["Role-Based AI Agents (--role)"]
+        Studio["Studio Role"]
+        QA["QA & Release Role"]
+        Platform["Platform Role"]
+        Enterprise["Enterprise Role"]
+        Developer["Developer Role"]
+    end
+
+    subgraph Lifecycle["QuestForge XR Delivery Lifecycle"]
+        Scaffold["1. Scaffold & Sync (quest init / sync / check)"]
+        Build["2. Toolchain & CI Build (quest setup / doctor / ci)"]
+        Verify["3. 100/100 VRC Verification (quest verify)"]
+        Distribute["4. Lab, Store & Enterprise Rollout (quest ops / store / hms-push)"]
+    end
+
+    Studio --> Scaffold & Build & Verify
+    Platform --> Build
+    QA --> Verify & Distribute
+    Enterprise --> Verify & Distribute
+    Developer --> Scaffold & Build & Verify & Distribute
+```
+
 ---
 
 ## Value Proposition

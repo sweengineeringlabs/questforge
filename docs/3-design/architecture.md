@@ -2,7 +2,9 @@
 
 ## Overview
 
-QuestForge is organized under **`swartch` Architecture 4.0** as an 11-package Rust workspace (`1.100.0`) paired with a `machineweb` (`mweb`) TypeScript frontend (`web/`). It separates domain contracts (`api`), cohesive domain libraries (`lib`), the CLI binary (`bin`), and external execution targets (Unity, Unreal, Native Rust OpenXR, ADB QA fleets, and Meta HMS/MDMs).
+QuestForge is organized under **`swartch` Architecture 4.0** as an 11-package Rust workspace (`1.100.0`) paired with a `machineweb` (`mweb`) TypeScript frontend (`web/`). It separates domain contracts (`api`), cohesive domain libraries (`lib`), the CLI binary (`bin`), and external execution targets (Unity, Unreal, Native Rust OpenXR, ADB QA fleets, Meta Horizon Store, and Meta HMS/MDMs).
+
+![QuestForge System Architecture](../assets/devpost-architecture.jpg)
 
 ## Stakeholders & Concerns
 
@@ -31,7 +33,7 @@ flowchart TD
         CI["questforge-ci (Build, Rust APK, CycloneDX SBOM)"]
         Verify["questforge-verify (QV-001..QV-006 Scorecards)"]
         MCP["questforge-mcp (14 JSON-RPC 2.0 Tools + LlmProviderSpi)"]
-        Ops["questforge-ops (ADB Fleet + Agent + HMS/MDM Push)"]
+        Ops["questforge-ops (ADB Fleet + Agent + Store + HMS/MDM Push)"]
         Server["questforge-server (REST API, JWT RBAC, PostgreSQL)"]
     end
 
@@ -41,13 +43,15 @@ flowchart TD
 
     CLI --> Init & Doctor & Toolchain & CI & Verify & MCP & Ops & Server
     Web -->|"REST + X-Quest-Role / Bearer JWT"| Server
-    MCP --> Init & Doctor & CI & Verify
+    MCP --> Init & Doctor & Toolchain & CI & Verify & Ops
     Server --> Ops & Verify
     Init & Doctor & CI & Verify & Ops --> Config
     Config & Toolchain & Doctor & Init & CI & Verify & MCP & Ops & Server --> ApiCrate
 ```
 
-## End-to-End Data Flow (Code → Horizon OS → Meta HMS)
+## End-to-End Data Flow (Code → Horizon OS → Meta Horizon Store & HMS)
+
+![QuestForge VRC & Release Pipeline](../assets/devpost-vrc-pipeline.jpg)
 
 ```mermaid
 flowchart LR
@@ -55,7 +59,7 @@ flowchart LR
     Gen -->|"quest check (QF-SPEC/SYNC/VRC/OXR/PERF)"| Build["quest ci (Unity / Unreal / Rust OpenXR)"]
     Build -->|"APK + build-metadata.json + sbom.cdx.json"| Verify["quest verify (100/100 Score)"]
     Verify -->|"QA Lab Rollout"| Lab["quest ops deploy / agent (ADB Quest Fleet)"]
-    Verify -->|"Store Channel"| Store["ovr-platform-util (ALPHA -> PROD)"]
+    Verify -->|"Store Channel"| Store["quest ops store / ovr_store (ALPHA -> PROD)"]
     Verify -->|"Enterprise OTA"| HMS["quest ops hms-push (Meta HMS / ManageXR / ArborXR)"]
 ```
 
@@ -84,6 +88,69 @@ sequenceDiagram
 
 - **Auth & Fallback (`quest auth` / `--auth`):** OAuth-first (`gcloud` ADC/OAuth for Gemini, `~/.codex/auth.json` for OpenAI, `~/.claude/.credentials.json` for Anthropic), falling back to environment API keys (`GEMINI_API_KEY` / `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) or an interactive API-key prompt when OAuth fails.
 - **Linux via WSL Interop (`questforge-toolchain` & `questforge-ops`):** Because Meta does not ship a native Linux `ovr-platform-util`, QuestForge detects WSL (`PlatformTarget { os: "wsl", .. }`), provisions native Linux `adb`/`cmdline-tools` alongside Meta's Windows `ovr-platform-util.exe` (`chmod 0755`), reuses any existing Windows host cache under `/mnt/c/Users/*/.questforge/`, and transparently translates Linux paths via `wslpath -w` when invoking `ovr-platform-util.exe`.
+
+## Cross-Platform & WSL Interop Architecture
+
+```mermaid
+flowchart TD
+    CLI["quest setup / quest ops store / ovr_store"] --> Detect{"PlatformTarget::detect_host()"}
+
+    Detect -->|"Windows (os = windows)"| WinCache["~/.questforge/cache/windows-x64/"]
+    WinCache --> WinTools["adb.exe + sdkmanager.bat + ovr-platform-util.exe"]
+    WinTools --> WinExec["Direct Windows Execution"]
+
+    Detect -->|"Native Linux (os = linux)"| LinCache["~/.questforge/cache/linux-x64/"]
+    LinCache --> LinTools["Native Linux adb + sdkmanager"]
+
+    Detect -->|"Linux on WSL (os = wsl)"| WslCache["~/.questforge/cache/wsl-x64/ or /mnt/c/Users/*/.questforge/"]
+    WslCache --> WslAdb["Native Linux adb + sdkmanager"]
+    WslCache --> WslOvr["Windows ovr-platform-util.exe (chmod 0755)"]
+    WslOvr --> WslPath["wslpath -w (--apk, --debug_symbols_dir, --output_dir)"]
+    WslPath --> HorizonStore["Meta Horizon Store API (upload / download / channels)"]
+```
+
+## Control Plane & Persistence Schema (`questforge-server`)
+
+```mermaid
+erDiagram
+    PROJECTS ||--o{ BUILDS : produces
+    PROJECTS ||--o{ VERIFY_REPORTS : audits
+    BUILDS ||--o{ VERIFY_REPORTS : validates
+    BUILDS ||--o{ DEPLOYMENTS : rolls_out
+
+    PROJECTS {
+        string id PK
+        string name
+        string package_id
+        string engine
+    }
+    BUILDS {
+        string id PK
+        string project_id FK
+        string version
+        string apk_sha256
+        string sbom_path
+    }
+    VERIFY_REPORTS {
+        string id PK
+        string project_id FK
+        int score
+        boolean ready
+        json checks
+    }
+    DEPLOYMENTS {
+        string id PK
+        string device_group
+        string apk_path
+        string status
+    }
+    AUDIT_LOG {
+        string id PK
+        string actor_role
+        string action
+        string timestamp
+    }
+```
 
 ## Layer Responsibilities
 

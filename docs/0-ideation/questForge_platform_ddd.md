@@ -68,14 +68,9 @@ The platform should enable:
 
 All configuration shall be stored in source control.
 
-```text
-Git Repository
-      ↓
-Pull Request
-      ↓
-Automation
-      ↓
-Deployment
+```mermaid
+flowchart LR
+    Repo["Git Repository (quest_forge.yaml)"] --> PR["Pull Request"] --> Auto["CI Automation (quest check / ci / verify)"] --> Deploy["Deployment (Lab / Store / MDM)"]
 ```
 
 ---
