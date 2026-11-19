@@ -268,10 +268,14 @@ impl CiOrchestrator {
             }
         })?;
 
-        let upload_command = opts
-            .upload_channel
-            .as_ref()
-            .map(|channel| upload_command_for(channel, opts.app_id.as_deref(), &apk_path));
+        let upload_command = opts.upload_channel.as_ref().map(|channel| {
+            upload_command_for(
+                channel,
+                opts.app_id.as_deref(),
+                cfg.store.as_ref(),
+                &apk_path,
+            )
+        });
 
         if !opts.dry_run {
             if let Some(cmd) = &upload_command {
@@ -364,7 +368,12 @@ fn build_command_for(
     }
 }
 
-fn upload_command_for(channel: &str, app_id: Option<&str>, apk_path: &Path) -> Vec<String> {
+fn upload_command_for(
+    channel: &str,
+    app_id: Option<&str>,
+    store_cfg: Option<&questforge_config::StoreConfig>,
+    apk_path: &Path,
+) -> Vec<String> {
     let mut cmd = vec![
         "ovr-platform-util".to_string(),
         "upload-quest-build".to_string(),
@@ -373,9 +382,30 @@ fn upload_command_for(channel: &str, app_id: Option<&str>, apk_path: &Path) -> V
         "--apk".to_string(),
         apk_path.display().to_string(),
     ];
-    if let Some(id) = app_id {
+    let resolved_app_id = app_id.or_else(|| store_cfg.and_then(|s| s.app_id.as_deref()));
+    if let Some(id) = resolved_app_id {
         cmd.push("--app-id".to_string());
         cmd.push(id.to_string());
+    }
+    if let Some(store) = store_cfg {
+        if let Some(age_group) = &store.age_group {
+            if !age_group.trim().is_empty() {
+                cmd.push("--age-group".to_string());
+                cmd.push(age_group.trim().to_string());
+            }
+        }
+        if let Some(notes) = &store.release_notes {
+            if !notes.trim().is_empty() {
+                cmd.push("--notes".to_string());
+                cmd.push(notes.trim().to_string());
+            }
+        }
+        if store.wait_for_postprocessing {
+            cmd.push("--wait-for-postprocessing".to_string());
+        }
+        if store.draft {
+            cmd.push("--draft".to_string());
+        }
     }
     cmd
 }
@@ -423,31 +453,50 @@ fn package_rust_apk(
         source,
     })?;
     let mut zip = ZipWriter::new(file);
-    let opts = SimpleFileOptions::default();
+    let default_opts = SimpleFileOptions::default();
+    let stored_opts =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
-    let mut entries: Vec<(String, Vec<u8>)> = vec![
-        ("AndroidManifest.xml".to_string(), manifest_bytes),
-        ("classes.dex".to_string(), dex_bytes),
-        (format!("lib/arm64-v8a/lib{lib_stem}.so"), native_lib_bytes),
+    let mut entries: Vec<(String, Vec<u8>, bool)> = vec![
+        ("AndroidManifest.xml".to_string(), manifest_bytes, false),
+        ("classes.dex".to_string(), dex_bytes, false),
+        (
+            format!("lib/arm64-v8a/lib{lib_stem}.so"),
+            native_lib_bytes,
+            false,
+        ),
     ];
 
+    for (name, data) in find_additional_native_libs(project_dir) {
+        if !entries.iter().any(|(existing, _, _)| existing == &name) {
+            entries.push((name, data, false));
+        }
+    }
+
     if let Some(arsc) = find_compiled_resources_arsc(project_dir) {
-        entries.push(("resources.arsc".to_string(), arsc));
+        entries.push(("resources.arsc".to_string(), arsc, true));
     }
 
     entries.extend(vec![
         (
             "META-INF/MANIFEST.MF".to_string(),
             b"Manifest-Version: 1.0\nCreated-By: QuestForge\n".to_vec(),
+            false,
         ),
         (
             "META-INF/QUESTFORGE.SF".to_string(),
             b"Signature-Version: 1.0\n".to_vec(),
+            false,
         ),
-        ("META-INF/QUESTFORGE.RSA".to_string(), b"PKCS7".to_vec()),
+        (
+            "META-INF/QUESTFORGE.RSA".to_string(),
+            b"PKCS7".to_vec(),
+            false,
+        ),
     ]);
 
-    for (name, data) in entries {
+    for (name, data, is_stored) in entries {
+        let opts = if is_stored { stored_opts } else { default_opts };
         zip.start_file(name, opts).map_err(|err| CiError::Io {
             path: apk_path.to_path_buf(),
             source: std::io::Error::other(err.to_string()),
@@ -494,6 +543,31 @@ fn find_compiled_rust_cdylib(project_dir: &Path, lib_stem: &str) -> Option<Vec<u
         }
     }
     None
+}
+
+fn find_additional_native_libs(project_dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut libs = Vec::new();
+    let dirs = [
+        project_dir.join("lib").join("arm64-v8a"),
+        project_dir.join("libs").join("arm64-v8a"),
+        project_dir.join("jni").join("arm64-v8a"),
+        project_dir.join("target").join("lib").join("arm64-v8a"),
+    ];
+    for dir in dirs {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("so") {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if let Ok(bytes) = fs::read(&path) {
+                            libs.push((format!("lib/arm64-v8a/{name}"), bytes));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    libs
 }
 
 fn find_compiled_classes_dex(project_dir: &Path) -> Option<Vec<u8>> {
