@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "quest"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "questforge-ci",
@@ -870,14 +870,14 @@ dependencies = [
 
 [[package]]
 name = "questforge-api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "questforge-ci"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "questforge-api",
@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "questforge-api",
  "serde",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-doctor"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "questforge-api",
  "questforge-config",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-init"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "questforge-api",
  "questforge-config",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "questforge-api",
  "questforge-ci",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-ops"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "questforge-api",
@@ -961,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "hmac 0.12.1",
@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-toolchain"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "questforge-api",
@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "questforge-verify"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "questforge-api",

@@ -395,20 +395,20 @@ impl QuestMcpServer {
             .unwrap_or_else(|| json!({}));
 
         let outcome = match name {
-            "doctor_check" => call_doctor(&args),
-            "sync_project" => call_sync(&args),
-            "check_source" => call_check_source(&args),
-            "init_project" => call_init(&args),
-            "build_project" => call_build(&args),
-            "verify_release" => call_verify(&args),
+            "doctor_check" => call_doctor(&self.workspace_root, &args),
+            "sync_project" => call_sync(&self.workspace_root, &args),
+            "check_source" => call_check_source(&self.workspace_root, &args),
+            "init_project" => call_init(&self.workspace_root, &args),
+            "build_project" => call_build(&self.workspace_root, &args),
+            "verify_release" => call_verify(&self.workspace_root, &args),
             "generate_pipeline" => call_generate_pipeline(&args),
             "analyze_build_failure" => call_analyze_build_failure(&args),
             "search_docs" => self.call_search_docs(&args),
-            "fleet_discover" => call_fleet_discover(&args),
-            "publish_mdm" => call_publish_mdm(&args),
-            "setup_toolchain" => call_setup_toolchain(&args),
-            "upload_store" => call_upload_store(&args),
-            "ovr_store" => call_ovr_store(&args),
+            "fleet_discover" => call_fleet_discover(&self.workspace_root, &args),
+            "publish_mdm" => call_publish_mdm(&self.workspace_root, &args),
+            "setup_toolchain" => call_setup_toolchain(&self.workspace_root, &args),
+            "upload_store" => call_upload_store(&self.workspace_root, &args),
+            "ovr_store" => call_ovr_store(&self.workspace_root, &args),
             unknown => {
                 return JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -475,11 +475,35 @@ impl QuestMcpServer {
     }
 }
 
-fn call_doctor(args: &Value) -> Result<String, String> {
-    let project_dir = args
+fn resolve_workspace_path(workspace_root: &Path, raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "." {
+        return workspace_root.to_path_buf();
+    }
+    let candidate = Path::new(trimmed);
+    if candidate.is_absolute() || candidate.exists() {
+        return candidate.to_path_buf();
+    }
+    let joined = workspace_root.join(candidate);
+    if joined.exists() {
+        return joined;
+    }
+    if workspace_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n == trimmed)
+    {
+        return workspace_root.to_path_buf();
+    }
+    joined
+}
+
+fn call_doctor(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let raw_dir = args
         .get("project_dir")
         .and_then(|v| v.as_str())
         .unwrap_or(".");
+    let project_dir = resolve_workspace_path(workspace_root, raw_dir);
     let ci = args.get("ci").and_then(|v| v.as_bool()).unwrap_or(false);
     let strict = args
         .get("strict")
@@ -487,11 +511,11 @@ fn call_doctor(args: &Value) -> Result<String, String> {
         .unwrap_or(false);
     let fix = args.get("fix").and_then(|v| v.as_bool()).unwrap_or(false);
     if fix {
-        let _ = ProjectScaffolder::sync_project(Path::new(project_dir));
+        let _ = ProjectScaffolder::sync_project(&project_dir);
     }
 
     let report = DoctorRunner::run(&DoctorOptions {
-        project_dir: PathBuf::from(project_dir),
+        project_dir,
         ci,
         strict,
         fix,
@@ -500,31 +524,32 @@ fn call_doctor(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_sync(args: &Value) -> Result<String, String> {
-    let project_dir = args
+fn call_sync(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let raw_dir = args
         .get("project_dir")
         .and_then(|v| v.as_str())
         .unwrap_or(".");
-    let report =
-        ProjectScaffolder::sync_project(Path::new(project_dir)).map_err(|e| e.to_string())?;
+    let project_dir = resolve_workspace_path(workspace_root, raw_dir);
+    let report = ProjectScaffolder::sync_project(&project_dir).map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_check_source(args: &Value) -> Result<String, String> {
-    let project_dir = args
+fn call_check_source(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let raw_dir = args
         .get("project_dir")
         .and_then(|v| v.as_str())
         .unwrap_or(".");
-    let report =
-        ProjectScaffolder::check_project(Path::new(project_dir)).map_err(|e| e.to_string())?;
+    let project_dir = resolve_workspace_path(workspace_root, raw_dir);
+    let report = ProjectScaffolder::check_project(&project_dir).map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_init(args: &Value) -> Result<String, String> {
-    let target_dir = args
+fn call_init(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let target_dir_raw = args
         .get("target_dir")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing 'target_dir'".to_string())?;
+    let target_dir = resolve_workspace_path(workspace_root, target_dir_raw);
     let name = args
         .get("name")
         .and_then(|v| v.as_str())
@@ -550,7 +575,7 @@ fn call_init(args: &Value) -> Result<String, String> {
     let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let report = ProjectScaffolder::scaffold(&InitOptions {
-        target_dir: PathBuf::from(target_dir),
+        target_dir,
         name: name.to_string(),
         package_id: package_id.to_string(),
         engine,
@@ -562,15 +587,21 @@ fn call_init(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_build(args: &Value) -> Result<String, String> {
-    let project_dir = args
+fn call_build(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let raw_dir = args
         .get("project_dir")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "missing 'project_dir'".to_string())?;
-    let output_dir = args
+        .unwrap_or(".");
+    let project_dir = resolve_workspace_path(workspace_root, raw_dir);
+    let output_dir_raw = args
         .get("output_dir")
         .and_then(|v| v.as_str())
         .unwrap_or("dist");
+    let output_dir = if Path::new(output_dir_raw).is_absolute() {
+        PathBuf::from(output_dir_raw)
+    } else {
+        project_dir.join(output_dir_raw)
+    };
     let release_version = args
         .get("release_version")
         .and_then(|v| v.as_str())
@@ -589,8 +620,8 @@ fn call_build(args: &Value) -> Result<String, String> {
         .unwrap_or(true);
 
     let report = CiOrchestrator::run(&CiOptions {
-        project_dir: PathBuf::from(project_dir),
-        output_dir: PathBuf::from(output_dir),
+        project_dir,
+        output_dir,
         release_version: release_version.to_string(),
         upload_channel,
         app_id,
@@ -600,18 +631,21 @@ fn call_build(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_verify(args: &Value) -> Result<String, String> {
-    let apk_path = args
+fn call_verify(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let apk_raw = args
         .get("apk_path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing 'apk_path'".to_string())?;
-    let project_dir = args
-        .get("project_dir")
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from);
+    let apk_path = resolve_workspace_path(workspace_root, apk_raw);
+    let project_dir = Some(
+        args.get("project_dir")
+            .and_then(|v| v.as_str())
+            .map(|raw| resolve_workspace_path(workspace_root, raw))
+            .unwrap_or_else(|| workspace_root.to_path_buf()),
+    );
 
     let report = ApkVerifier::verify(&VerifyOptions {
-        apk_path: PathBuf::from(apk_path),
+        apk_path,
         project_dir,
         max_apk_bytes: None,
     })
@@ -670,16 +704,16 @@ fn call_analyze_build_failure(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&json!({ "diagnostics": diagnostics })).map_err(|e| e.to_string())
 }
 
-fn call_fleet_discover(args: &Value) -> Result<String, String> {
+fn call_fleet_discover(workspace_root: &Path, args: &Value) -> Result<String, String> {
     let group = args
         .get("group")
         .and_then(|v| v.as_str())
         .unwrap_or("default");
-    let registry = args
+    let registry_raw = args
         .get("registry")
         .and_then(|v| v.as_str())
         .unwrap_or(".questforge/fleet.json");
-    let reg_path = PathBuf::from(registry);
+    let reg_path = resolve_workspace_path(workspace_root, registry_raw);
     let mut inv = FleetInventory::load(&reg_path).map_err(|e| e.to_string())?;
     let devs =
         FleetManager::discover(&mut inv, group, &OpsEnv::System).map_err(|e| e.to_string())?;
@@ -687,7 +721,7 @@ fn call_fleet_discover(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&devs).map_err(|e| e.to_string())
 }
 
-fn call_publish_mdm(args: &Value) -> Result<String, String> {
+fn call_publish_mdm(workspace_root: &Path, args: &Value) -> Result<String, String> {
     let provider = match args.get("provider").and_then(|v| v.as_str()) {
         None | Some("meta-hms") => MdmProvider::MetaHms,
         Some("managexr") => MdmProvider::ManageXr,
@@ -699,10 +733,11 @@ fn call_publish_mdm(args: &Value) -> Result<String, String> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing 'app_id'".to_string())?
         .to_string();
-    let apk_path = args
+    let apk_raw = args
         .get("apk_path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing 'apk_path'".to_string())?;
+    let apk_path = resolve_workspace_path(workspace_root, apk_raw);
     let channel = args
         .get("channel")
         .and_then(|v| v.as_str())
@@ -727,7 +762,7 @@ fn call_publish_mdm(args: &Value) -> Result<String, String> {
         &HmsReleaseRequest {
             provider,
             app_id,
-            apk_path: PathBuf::from(apk_path),
+            apk_path,
             channel,
             device_group,
             endpoint,
@@ -739,11 +774,13 @@ fn call_publish_mdm(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
 }
 
-fn call_setup_toolchain(args: &Value) -> Result<String, String> {
-    let project_dir = args
-        .get("project_dir")
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from);
+fn call_setup_toolchain(workspace_root: &Path, args: &Value) -> Result<String, String> {
+    let project_dir = Some(
+        args.get("project_dir")
+            .and_then(|v| v.as_str())
+            .map(|raw| resolve_workspace_path(workspace_root, raw))
+            .unwrap_or_else(|| workspace_root.to_path_buf()),
+    );
     let allow_unverified = args
         .get("allow_unverified")
         .and_then(|v| v.as_bool())
@@ -788,17 +825,17 @@ fn call_setup_toolchain(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 
-fn call_upload_store(args: &Value) -> Result<String, String> {
+fn call_upload_store(workspace_root: &Path, args: &Value) -> Result<String, String> {
     let app_id = args
         .get("app_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "missing app_id".to_string())?
         .to_string();
-    let apk_path = PathBuf::from(
-        args.get("apk_path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "missing apk_path".to_string())?,
-    );
+    let apk_raw = args
+        .get("apk_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing apk_path".to_string())?;
+    let apk_path = resolve_workspace_path(workspace_root, apk_raw);
     let channel = args
         .get("channel")
         .and_then(|v| v.as_str())
@@ -833,7 +870,7 @@ fn call_upload_store(args: &Value) -> Result<String, String> {
     serde_json::to_string_pretty(&receipt).map_err(|e| e.to_string())
 }
 
-fn call_ovr_store(args: &Value) -> Result<String, String> {
+fn call_ovr_store(workspace_root: &Path, args: &Value) -> Result<String, String> {
     let action_raw = args
         .get("action")
         .and_then(|v| v.as_str())
@@ -850,7 +887,7 @@ fn call_ovr_store(args: &Value) -> Result<String, String> {
     let app_id = args
         .get("app_id")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "missing app_id".to_string())?
+        .unwrap_or_default()
         .to_string();
     let secret_env = args
         .get("app_secret_env")
@@ -866,7 +903,7 @@ fn call_ovr_store(args: &Value) -> Result<String, String> {
             apk_path: args
                 .get("apk_path")
                 .and_then(|v| v.as_str())
-                .map(PathBuf::from),
+                .map(|raw| resolve_workspace_path(workspace_root, raw)),
             channel: args
                 .get("channel")
                 .and_then(|v| v.as_str())
@@ -878,7 +915,7 @@ fn call_ovr_store(args: &Value) -> Result<String, String> {
             dir_path: args
                 .get("dir_path")
                 .and_then(|v| v.as_str())
-                .map(PathBuf::from),
+                .map(|raw| resolve_workspace_path(workspace_root, raw)),
             dlc_sku: args
                 .get("dlc_sku")
                 .and_then(|v| v.as_str())

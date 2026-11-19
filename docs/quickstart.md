@@ -41,15 +41,27 @@ chmod +x ./quest
 ### Windows (PowerShell)
 
 ```pwsh
+# Authenticate with your AI provider (gemini, openai, or anthropic)
 .\quest.exe auth --provider gemini
-.\quest.exe agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
+
+# Scaffold a sample Meta Quest OpenXR project (or point --project-dir at an existing project)
+.\quest.exe init my-quest-app --engine rust --package-id com.studio.myquestapp --skip-doctor
+
+# Launch the Studio AI agent to inspect and verify readiness
+.\quest.exe agent --role studio --provider gemini --project-dir my-quest-app --prompt "Inspect my Quest project and verify Meta Quest readiness"
 ```
 
 ### Linux & WSL (Bash)
 
 ```bash
+# Authenticate with your AI provider (gemini, openai, or anthropic)
 ./quest auth --provider gemini
-./quest agent --role studio --provider gemini --prompt "Inspect my Quest project and verify Meta Quest readiness"
+
+# Scaffold a sample Meta Quest OpenXR project (or point --project-dir at an existing project)
+./quest init my-quest-app --engine rust --package-id com.studio.myquestapp --skip-doctor
+
+# Launch the Studio AI agent to inspect and verify readiness
+./quest agent --role studio --provider gemini --project-dir my-quest-app --prompt "Inspect my Quest project and verify Meta Quest readiness"
 ```
 
 ---
