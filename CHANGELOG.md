@@ -5,6 +5,14 @@ All notable changes to **QuestForge** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-11-19
+
+### Added
+- **Dual-Mode Gesture Detection & Hexagonal Input Architecture (ADR-002):** Declarative `kind: hand_gesture` (`gesture: wave`) in `questforge-config` and `questforge-init`, strongly typed scene dispatchers (`dispatch_gesture`), zero-allocation 120Hz OpenXR joint kinematics (`OpenXrHandWaveDetector`), hands-free Android IR proximity sensor detection (`Sensor.TYPE_PROXIMITY`), and touch fling fallback in `MainActivity`.
+- **Dual-Stack Release Packaging & Real ARM64 APK:** `package_rust_apk` in `questforge-ci` bundles real 64-bit ARM ELF `liborbit_pulse_vr.so` (455 KB) with OpenXR entry points and Android DEX launcher into verified release APK (`195 KB`, scoring 100/100 on `quest verify`).
+- **Showcase Game Artifact Cloud Release:** Pre-built `orbit-pulse-vr-1.0.0.apk` published as a release asset for instant evaluator smoke testing on phones and headsets without requiring local NDK setup.
+- **Repository-Wide Markdown Naming Standard:** Aligned all markdown documentation across `docs/` and `.agents/` to `snake_case`.
+
 ## [0.1.1] - 2026-11-19
 
 ### Added
@@ -22,5 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lab Fleet, Enterprise MDM & Hosted Control Plane:** `quest ops` (`discover`, `deploy`, `rollback`, `telemetry`, `logcat`, `screenshot`, `agent`, `hms-push` for Meta HMS / ManageXR / ArborXR) and `quest serve` (PostgreSQL, HS256 JWT RBAC, immutable audit log, and `machineweb` dashboard).
 - **Showcase App:** `examples/orbit-pulse-vr` (Native Rust OpenXR with 120 Hz, hand tracking, passthrough, foveation, and spatial anchors).
 
+[0.1.2]: https://github.com/sweengineeringlabs/questforge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/sweengineeringlabs/questforge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sweengineeringlabs/questforge/releases/tag/v0.1.0

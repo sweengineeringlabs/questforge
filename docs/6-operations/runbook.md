@@ -117,6 +117,14 @@ This script exercises the full stack end-to-end:
 
 ### Showcase Game Playbook (`examples/orbit-pulse-vr`)
 
+#### Evaluator Cloud Fast-Track (Zero Toolchain / Instant Verification)
+Judges and evaluators can verify the release APK directly from GitHub releases without building from source:
+```pwsh
+Invoke-WebRequest -Uri "https://github.com/sweengineeringlabs/questforge/releases/latest/download/orbit-pulse-vr-1.0.0.apk" -OutFile orbit-pulse-vr.apk
+quest verify orbit-pulse-vr.apk --project-dir examples/orbit-pulse-vr
+```
+
+#### Build, Test & Publish from Source
 With `quest serve --addr 127.0.0.1:8090 --web-root web/dist` running:
 ```pwsh
 cd examples/orbit-pulse-vr
@@ -128,6 +136,11 @@ quest verify dist/orbit-pulse-vr-1.0.0.apk
 .\scripts\publish-demo.ps1    # or `scripts\publish-demo.cmd` in cmd.exe
 ```
 Open `http://127.0.0.1:8090/` to inspect `orbit-pulse-vr`, its build, its `100/100` VRC scorecard, and the audit log.
+
+#### Testing the Hand-Wave Interaction (ADR-002)
+* **On Meta Quest Headset:** Optical 3D hand tracking (`XR_EXT_hand_tracking`) evaluates palm lateral velocity ($v_x > 0.20\text{ m/s}$) via `OpenXrHandWaveDetector` at 120 Hz with zero heap allocations.
+* **On Any Android Phone / Tablet:** Install the APK. Wave a physical hand across the front IR proximity sensor ($< 5\text{ cm}$) to trigger the wave hands-free and boost kinetic shields ($+20\%$).
+* **On Headless Emulator / CI:** Swipe across the screen ($|v_x| > 500\text{ px/s}$) or tap **"Wave Hand Gesture"** to trigger simulated gesture dispatch.
 
 ---
 
