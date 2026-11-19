@@ -71,6 +71,12 @@ quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app
 #### Uploading to Meta Horizon Store (Release Channels)
 QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
 * **Credential Auto-Resolution:** The CLI automatically pulls the developer secret from `$env:QUEST_META_APP_SECRET`.
+* **App ID Validation & Hierarchy:** The CLI verifies whether `--app-id` is provided via:
+  1. CLI flag `--app-id <APP_ID>`
+  2. Environment variable `$env:QUEST_META_APP_ID`
+  3. `mdm.app_id` in `quest_forge.yaml` (via `--project-dir`)
+  * **When not set:** The command immediately halts with: `missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)`.
+  * **When set:** The build is validated and uploaded to the requested channel.
 * **Direct Channel Upload (`quest ops store-upload`):**
   ```pwsh
   quest ops store-upload --app-id <APP_ID> --apk my-quest-app/dist/my-quest-app-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"

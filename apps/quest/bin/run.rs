@@ -211,7 +211,7 @@ struct CiArgs {
     /// Optional Meta Horizon Store channel (e.g. ALPHA, RC, LIVE)
     #[arg(long)]
     upload_channel: Option<String>,
-    /// Optional Meta App ID for ovr-platform-util upload
+    /// Optional Meta App ID for ovr-platform-util upload (or QUEST_META_APP_ID env)
     #[arg(long)]
     app_id: Option<String>,
     /// Emit a starter CI pipeline template instead of running a build
@@ -452,7 +452,7 @@ enum OpsAction {
         /// Target MDM provider (`meta-hms`, `managexr`, `arborxr`)
         #[arg(long, value_enum)]
         provider: Option<CliMdmProvider>,
-        /// Application ID in the MDM
+        /// Application ID in the MDM (or QUEST_META_APP_ID env)
         #[arg(long)]
         app_id: Option<String>,
         /// Path to the verified `.apk`
@@ -473,9 +473,12 @@ enum OpsAction {
     },
     /// Upload a signed APK directly to a Meta Horizon Store release channel via `ovr-platform-util`
     StoreUpload {
-        /// Meta Horizon App ID (e.g. `1439257382612621`)
+        /// Meta Horizon App ID (e.g. `1439257382612621`, or QUEST_META_APP_ID env)
         #[arg(long)]
-        app_id: String,
+        app_id: Option<String>,
+        /// Optional directory containing quest_forge.yaml to resolve mdm.app_id
+        #[arg(long)]
+        project_dir: Option<PathBuf>,
         /// Path to the signed `.apk`
         #[arg(long)]
         apk: PathBuf,
@@ -497,9 +500,12 @@ enum OpsAction {
         /// Store operation (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`)
         #[arg(long, value_enum)]
         action: CliOvrStoreAction,
-        /// Meta Horizon App ID (required for all actions except `version`)
+        /// Meta Horizon App ID (required for all actions except `version`, or QUEST_META_APP_ID env)
         #[arg(long)]
         app_id: Option<String>,
+        /// Optional directory containing quest_forge.yaml to resolve mdm.app_id
+        #[arg(long)]
+        project_dir: Option<PathBuf>,
         /// Optional APK path (`upload-quest-build`)
         #[arg(long)]
         apk: Option<PathBuf>,
@@ -527,7 +533,7 @@ enum OpsAction {
     },
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum CliOvrStoreAction {
     #[value(name = "upload-quest-build")]
     UploadQuestBuild,
@@ -864,12 +870,27 @@ fn run_ci(args: CiArgs) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    let resolved_app_id = args
+        .app_id
+        .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+        .or_else(|| {
+            QuestforgeConfig::load_from_dir(&args.project_dir)
+                .ok()
+                .and_then(|c| c.mdm)
+                .map(|m| m.app_id)
+                .filter(|s| !s.trim().is_empty())
+        });
+    if args.upload_channel.is_some() && resolved_app_id.is_none() {
+        eprintln!("quest ci failed: missing Meta Horizon App ID for upload (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
+        return ExitCode::FAILURE;
+    }
+
     let opts = CiOptions {
         project_dir: args.project_dir,
         output_dir: args.output_dir,
         release_version: args.release_version,
         upload_channel: args.upload_channel,
-        app_id: args.app_id,
+        app_id: resolved_app_id,
         dry_run: args.dry_run,
     };
 
@@ -1480,10 +1501,11 @@ fn run_ops(args: OpsArgs) -> ExitCode {
                     }
                 });
             let resolved_app_id = app_id
+                .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
                 .or_else(|| mdm_cfg.as_ref().map(|m| m.app_id.clone()))
                 .unwrap_or_default();
             if resolved_app_id.trim().is_empty() {
-                eprintln!("quest ops hms-push failed: provide --app-id or configure mdm.app_id in quest_forge.yaml");
+                eprintln!("quest ops hms-push failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
                 return ExitCode::FAILURE;
             }
             let resolved_channel = channel
@@ -1535,15 +1557,30 @@ fn run_ops(args: OpsArgs) -> ExitCode {
         }
         OpsAction::StoreUpload {
             app_id,
+            project_dir,
             apk,
             channel,
             app_secret_env,
             notes,
             ovr_bin,
         } => {
+            let resolved_app_id = app_id
+                .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+                .or_else(|| {
+                    project_dir
+                        .as_deref()
+                        .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
+                        .and_then(|cfg| cfg.mdm)
+                        .map(|m| m.app_id)
+                })
+                .unwrap_or_default();
+            if resolved_app_id.trim().is_empty() {
+                eprintln!("quest ops store-upload failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
+                return ExitCode::FAILURE;
+            }
             let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
             let req = StoreUploadRequest {
-                app_id,
+                app_id: resolved_app_id,
                 app_secret,
                 apk_path: apk,
                 channel,
@@ -1574,6 +1611,7 @@ fn run_ops(args: OpsArgs) -> ExitCode {
         OpsAction::Store {
             action,
             app_id,
+            project_dir,
             apk,
             channel,
             build_id,
@@ -1583,10 +1621,24 @@ fn run_ops(args: OpsArgs) -> ExitCode {
             app_secret_env,
             ovr_bin,
         } => {
+            let resolved_app_id = app_id
+                .or_else(|| std::env::var("QUEST_META_APP_ID").ok())
+                .or_else(|| {
+                    project_dir
+                        .as_deref()
+                        .and_then(|dir| QuestforgeConfig::load_from_dir(dir).ok())
+                        .and_then(|cfg| cfg.mdm)
+                        .map(|m| m.app_id)
+                })
+                .unwrap_or_default();
+            if action != CliOvrStoreAction::Version && resolved_app_id.trim().is_empty() {
+                eprintln!("quest ops store failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)");
+                return ExitCode::FAILURE;
+            }
             let app_secret = std::env::var(&app_secret_env).unwrap_or_default();
             let req = OvrStoreRequest {
                 action: action.into(),
-                app_id: app_id.unwrap_or_default(),
+                app_id: resolved_app_id,
                 app_secret,
                 apk_path: apk,
                 channel,

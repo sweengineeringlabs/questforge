@@ -175,9 +175,21 @@ quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pu
 
 QuestForge provides full parity with Meta's official Horizon Store release pipeline (`ovr-platform-util` v211.0.0).
 
-#### Credentials Pre-Configuration
-* **Meta App Secret (`QUEST_META_APP_SECRET`):** By default, `quest ops store-upload`, `quest ops store`, and the MCP `upload_store` / `ovr_store` tools automatically resolve the secret from the `$env:QUEST_META_APP_SECRET` environment variable (pre-configured in the environment).
+#### Credentials & App ID Resolution Gate
+* **Meta App Secret (`QUEST_META_APP_SECRET`):** Automatically resolved from the `$env:QUEST_META_APP_SECRET` environment variable (pre-configured in the workstation environment).
 * **Meta App ID (`--app-id`):** The numeric Application ID registered on the [Meta Horizon Developer Dashboard](https://developers.meta.com/horizon/manage/).
+* **App ID Resolution Hierarchy & Validation Gate:**
+  `quest ops store-upload`, `quest ops store`, `quest ci`, and `quest ops hms-push` check if the App ID is present across three layered sources:
+  1. **CLI Flag:** `--app-id <APP_ID>`
+  2. **Environment Variable:** `$env:QUEST_META_APP_ID` (PowerShell) or `export QUEST_META_APP_ID="<APP_ID>"` (Bash)
+  3. **Project Manifest:** `mdm.app_id` in `quest_forge.yaml` (via `--project-dir <DIR>`)
+
+  > [!IMPORTANT]
+  > **When `--app-id` is not set:** The CLI halts immediately before calling Meta network utilities:
+  > ```text
+  > quest ops store-upload failed: missing Meta Horizon App ID (provide --app-id <APP_ID>, set QUEST_META_APP_ID, or configure mdm.app_id in quest_forge.yaml)
+  > ```
+  > **When `--app-id` is set:** The CLI validates the APK, invokes `ovr-platform-util` with `--app_id` and `--app_secret`, and reports release receipt SHA-256 and channel status.
 
 #### Method A: Direct Store Upload (`quest ops store-upload`)
 The fastest command to upload a signed, verified APK directly to a Meta Horizon Store release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`):
