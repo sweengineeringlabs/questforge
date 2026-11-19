@@ -17,12 +17,24 @@ quest sync --project-dir my-quest-app
 `quest sync` generates VRC-compliant `AndroidManifest.xml`, Horizon OS OpenXR extension bindings (`XR_FB_display_refresh_rate`, `XR_FB_passthrough`, `XR_EXT_hand_tracking`, `XR_FB_foveation`, `XR_FB_spatial_entity`), and strongly-typed action interfaces (`IMainArenaXrActions` / `MainArenaXrActions`).
 
 ### 2. Static Checks, Toolchain Setup & Diagnostics
+
+#### Windows (PowerShell)
 ```pwsh
 # Sub-second static gates (QF-SPEC-001, QF-SYNC-001, QF-VRC-001, QF-OXR-001, QF-PERF-001)
 quest check --project-dir my-quest-app
 
-# Provision verified binaries & check workstation (including XR_RUNTIME_JSON)
-quest setup --adb-version latest --allow-unverified
+# Provision verified Android + Meta Store binaries & check workstation (including XR_RUNTIME_JSON)
+quest setup --adb-version latest --ovr-version latest
+quest doctor --fix --project-dir my-quest-app
+```
+
+#### Linux & WSL (Bash)
+```bash
+# Sub-second static gates
+quest check --project-dir my-quest-app
+
+# Provision native Linux adb/cmdline-tools (+ ovr-platform-util.exe on WSL with chmod 0755)
+quest setup --adb-version latest --ovr-version latest
 quest doctor --fix --project-dir my-quest-app
 ```
 > **Linux via WSL:** On Windows Subsystem for Linux (WSL), `quest setup --ovr-version latest` automatically detects WSL, installs native Linux `adb`/`cmdline-tools` alongside Meta's Windows `ovr-platform-util.exe` (`0755`), and `quest ops store` / `ovr_store` transparently translate Linux file paths via `wslpath -w` (or reuse an existing Windows host install under `/mnt/c/Users/*/.questforge/`).

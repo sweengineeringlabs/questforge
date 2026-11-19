@@ -4,19 +4,35 @@ Operational procedures for running the QuestForge control plane, `machineweb` (`
 
 ---
 
-## 1. Prerequisites
+## 1. Prerequisites & Installation
 
 - **Rust:** `1.100.0` (pinned in `rust-toolchain.toml`)
 - **Architecture Auditor:** `swartch` CLI on `PATH`
 - **Frontend Toolchain:** Bun `1.4.2` + `mweb` CLI (`machineweb`)
 - **Optional Production Services:** PostgreSQL (when using `--database-url`) and Android `platform-tools` (`adb`) on lab hosts
 
+### Install Release Binary
+
+#### Windows (PowerShell)
+```pwsh
+Invoke-WebRequest -Uri "https://github.com/sweengineeringlabs/questforge/releases/latest/download/quest-x86_64-pc-windows-msvc.zip" -OutFile quest.zip
+Expand-Archive -Path quest.zip -DestinationPath . -Force
+.\quest.exe --version
+```
+
+#### Linux & WSL (Bash)
+```bash
+curl -fsSL https://github.com/sweengineeringlabs/questforge/releases/latest/download/quest-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+chmod +x ./quest
+./quest --version
+```
+
 ---
 
 ## 2. Build & Verify Locally
 
-### Rust Workspace & Architecture Gate
-```pwsh
+### Rust Workspace & Architecture Gate (Windows & Linux)
+```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -24,6 +40,8 @@ swartch --vocabulary config/vocabulary.toml crates/questforge-api crates/questfo
 ```
 
 ### Web Frontend (`web/`)
+
+#### Windows (PowerShell)
 ```pwsh
 Push-Location web
 bun install
@@ -34,19 +52,33 @@ bun run test
 Pop-Location
 ```
 
+#### Linux & WSL (Bash)
+```bash
+(cd web && bun install && mweb generate app && mweb check --browser && bun run build && bun run test)
+```
+
 ---
 
 ## 3. Running the Control Plane (`quest serve`)
 
 ### Local Development Mode (In-Memory Store, Header Role Auth)
-```pwsh
+```bash
 cargo run --bin quest -- serve --addr 127.0.0.1:8090 --web-root web/dist
 ```
 
 ### Production Mode (PostgreSQL + HS256 JWT Auth)
+
+#### Windows (PowerShell)
 ```pwsh
 $env:QUESTFORGE_DATABASE_URL = "postgres://user:password@localhost:5432/questforge"
 $env:QUESTFORGE_JWT_SECRET   = "<strong-random-secret>"
+quest serve --addr 0.0.0.0:8080 --web-root web/dist
+```
+
+#### Linux & WSL (Bash)
+```bash
+export QUESTFORGE_DATABASE_URL="postgres://user:password@localhost:5432/questforge"
+export QUESTFORGE_JWT_SECRET="<strong-random-secret>"
 quest serve --addr 0.0.0.0:8080 --web-root web/dist
 ```
 
@@ -98,6 +130,8 @@ quest ops agent --server http://127.0.0.1:8090 --group qa-lab
 ```
 
 Push a verified `100/100` APK to Meta HMS (`graph.oculus.com`), ManageXR (`managexrapi.com`), or ArborXR (`api.xrdm.app`):
+
+#### Windows (PowerShell)
 ```pwsh
 $env:QUESTFORGE_MDM_TOKEN = "<mdm-bearer-token>"
 # Using explicit CLI flags:
@@ -106,23 +140,33 @@ quest ops hms-push --provider meta-hms --app-id com.studio.app --apk dist/orbit-
 quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk
 ```
 
+#### Linux & WSL (Bash)
+```bash
+export QUESTFORGE_MDM_TOKEN="<mdm-bearer-token>"
+quest ops hms-push --provider meta-hms --app-id com.studio.app --apk dist/orbit-pulse-vr-1.0.0.apk --channel PRODUCTION --group training-floor
+quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk
+```
+
 ### AI Agents & Meta Horizon Store (`quest auth`, `quest agent --role`, `quest ops store`)
 Authenticate or inspect OAuth/API-key status (`gemini`, `openai`, `anthropic`):
-```pwsh
+```bash
 quest auth --status
 quest auth --provider gemini
 ```
 Run a role-based AI XR agent (`studio`, `enterprise`, `platform`, `qa`, `developer`) over 14 MCP tools:
-```pwsh
+```bash
 quest agent --role qa --provider gemini --auth --prompt "Verify examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk and upload to ALPHA for app_id <APP_ID>"
 ```
 Or run any 1:1 `ovr-platform-util` Store operation directly (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`):
+
+#### Windows (PowerShell)
 ```pwsh
 $env:QUEST_META_APP_SECRET = "<your-meta-app-secret>"
+quest ops store --action version
 quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
 ```
 
-### Linux via WSL Support
+#### Linux & WSL (Bash)
 Meta does not publish a native Linux `ovr-platform-util` binary. When running the Linux `quest` binary inside **WSL (Windows Subsystem for Linux)**:
 - **Auto-detection:** `quest` detects WSL automatically via `WSL_DISTRO_NAME`, `WSL_INTEROP`, or `/proc/version`.
 - **Toolchain setup:** `quest setup --ovr-version latest` installs native Linux `adb` and `cmdline-tools`, and provisions Meta's Windows `ovr-platform-util.exe` with executable permissions (`0755`) for WSL interop.
