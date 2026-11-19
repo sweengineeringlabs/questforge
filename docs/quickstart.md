@@ -69,5 +69,5 @@ chmod +x ./quest
 ## 3. Next Steps
 
 - **[Developer Guide](4-development/developer_guide.md)** — Scaffold (`quest init`), sync (`quest sync`), and verify (`quest check`, `quest verify`) XR projects
-- **[Operations Runbook](6-operations/runbook.md)** — Control plane (`quest serve`), lab headset fleet (`quest ops`), and Meta Horizon Store uploads (`quest ops store`)
+- **[Operations Runbook](6-operations/runbook.md)** — Control plane (`quest serve`), lab headset fleet (`quest ops`), Meta Horizon Store releases (`quest ops store-upload`), and enterprise MDM push (`quest ops hms-push`)
 - **[Documentation Hub](README.md)** — Architecture, role workflows, specifications, and glossary

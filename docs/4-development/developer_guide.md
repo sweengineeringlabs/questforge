@@ -11,7 +11,7 @@ Guide for **XR Application Developers** building Meta Quest apps and **Platform 
 - [Part 1: XR Application Developers (`unity` | `unreal` | `rust`)](#part-1-xr-application-developers-unity--unreal--rust)
   - [1. Scaffold & Sync Declarative XR Projects](#1-scaffold--sync-declarative-xr-projects)
   - [2. Static Checks, Toolchain Setup & Diagnostics](#2-static-checks-toolchain-setup--diagnostics)
-  - [3. Build, SBOM & Store Verification](#3-build-sbom--store-verification)
+  - [3. Build, SBOM, Verification & Meta Horizon Store Release](#3-build-sbom-verification--meta-horizon-store-release)
   - [4. Declarative Hand Gestures & Dual-Mode Interaction](#4-declarative-hand-gestures--dual-mode-interaction)
   - [5. Showcase App (`examples/orbit-pulse-vr`) & Enterprise MDM (`quest_forge.yaml` `mdm:`)](#5-showcase-app-examplesorbit-pulse-vr--enterprise-mdm-quest_forgeyaml-mdm)
   - [6. AI Agents & Provider Auth (`quest auth` & `quest agent`)](#6-ai-agents--provider-auth-quest-auth--quest-agent)
@@ -57,11 +57,36 @@ quest doctor --fix --project-dir my-quest-app
 ```
 > **Linux via WSL:** On Windows Subsystem for Linux (WSL), `quest setup --ovr-version latest` automatically detects WSL, installs native Linux `adb`/`cmdline-tools` alongside Meta's Windows `ovr-platform-util.exe` (`0755`), and `quest ops store` / `ovr_store` transparently translate Linux file paths via `wslpath -w` (or reuse an existing Windows host install under `/mnt/c/Users/*/.questforge/`).
 
-### 3. Build, SBOM & Store Verification
+### 3. Build, SBOM, Verification & Meta Horizon Store Release
+
+#### Local Build & Compliance Verification
 ```pwsh
+# 1. Build release binaries, package signed APK, and generate CycloneDX SBOM
 quest ci --project-dir my-quest-app --output-dir my-quest-app/dist --release-version 1.0.0
+
+# 2. Run static APK compliance verification against Meta VRCs (QV-001..QV-006)
 quest verify my-quest-app/dist/my-quest-app-1.0.0.apk --project-dir my-quest-app --format html --out scorecard.html
 ```
+
+#### Uploading to Meta Horizon Store (Release Channels)
+QuestForge embeds full parity with Meta's `ovr-platform-util` (v211.0.0):
+* **Credential Auto-Resolution:** The CLI automatically pulls the developer secret from `$env:QUEST_META_APP_SECRET`.
+* **Direct Channel Upload (`quest ops store-upload`):**
+  ```pwsh
+  quest ops store-upload --app-id <APP_ID> --apk my-quest-app/dist/my-quest-app-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"
+  ```
+* **Integrated CI Build & Store Release (`quest ci`):**
+  ```pwsh
+  quest ci --project-dir my-quest-app --release-version 1.0.0 --upload-channel ALPHA --app-id <APP_ID>
+  ```
+* **Granular Store Operations (`quest ops store`):**
+  ```pwsh
+  # Inspect tool version
+  quest ops store --action version
+
+  # Promote build to production
+  quest ops store --action set-release-channel-build --app-id <APP_ID> --channel PRODUCTION --build-id <BUILD_ID>
+  ```
 
 ### 4. Declarative Hand Gestures & Dual-Mode Interaction
 
