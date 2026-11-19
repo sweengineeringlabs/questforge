@@ -141,7 +141,7 @@ flowchart TD
 
 | Target Parameter | Tier 1: CLI / Tool Flag | Tier 2: Environment Variable | Tier 3: Manifest / Safe Fallback | Failure Mode (When Unresolved) | Commands & Tools Utilizing Pattern |
 |---|---|---|---|---|---|
-| **Meta Horizon App ID** | `--app-id <ID>` | `$env:QUEST_META_APP_ID` | `mdm.app_id` in `quest_forge.yaml` | Halts with missing App ID error and resolution paths (register in [Meta Horizon Developers](https://developers.meta.com/vr/manage/applications/)) | `quest ops store-upload`, `quest ops store`, `quest ci`, `quest ops hms-push`, `upload_store`, `ovr_store`, `publish_mdm` |
+| **Meta Horizon App ID** | `--app-id <ID>` | `$env:QUEST_META_APP_ID` | `mdm.app_id` in `quest_forge.yaml` | Halts with missing App ID error and resolution paths (register in [Meta Horizon Developers](https://developers.meta.com/horizon/manage/)) | `quest ops store-upload`, `quest ops store`, `quest ci`, `quest ops hms-push`, `upload_store`, `ovr_store`, `publish_mdm` |
 | **Meta App Secret** | `--app-secret-env <ENV>` | `$env:QUEST_META_APP_SECRET` | None (Zero-Trust Anti-Leakage Gate) | Halts with missing Meta App Secret error | `quest ops store-upload`, `quest ops store`, `upload_store`, `ovr_store` |
 | **Enterprise MDM Token** | `--token-env <ENV>` | `$env:QUESTFORGE_MDM_TOKEN` | `mdm.token_env` in `quest_forge.yaml` | Halts with missing MDM bearer token error | `quest ops hms-push`, `publish_mdm` |
 | **Store Release Channel** | `--channel <CH>` | N/A | `mdm.channel` or default `ALPHA` / `PRODUCTION` | Applies default release channel | `quest ops store-upload`, `quest ops store`, `quest ci`, `quest ops hms-push`, `ovr_store` |

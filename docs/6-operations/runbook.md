@@ -177,7 +177,7 @@ QuestForge provides full parity with Meta's official Horizon Store release pipel
 
 #### Credentials & App ID Resolution Gate
 * **Meta App Secret (`QUEST_META_APP_SECRET`):** Automatically resolved from the `$env:QUEST_META_APP_SECRET` environment variable (pre-configured in the workstation environment).
-* **Meta App ID (`--app-id`):** The numeric Application ID registered in [Meta Horizon Developers](https://developers.meta.com/vr/manage/applications/).
+* **Meta App ID (`--app-id`):** The numeric Application ID registered in [Meta Horizon Developers](https://developers.meta.com/horizon/manage/).
 * **App ID Resolution Hierarchy & Validation Gate:**
   `quest ops store-upload`, `quest ops store`, `quest ci`, and `quest ops hms-push` check if the App ID is present across three layered sources:
   1. **CLI Flag:** `--app-id <APP_ID>`
