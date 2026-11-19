@@ -171,35 +171,62 @@ quest ops hms-push --provider meta-hms --app-id com.studio.app --apk dist/orbit-
 quest ops hms-push --project-dir examples/orbit-pulse-vr --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk
 ```
 
-### AI Agents & Meta Horizon Store (`quest auth`, `quest agent --role`, `quest ops store`)
-Authenticate or inspect OAuth/API-key status (`gemini`, `openai`, `anthropic`):
+### Meta Horizon Store & Release Channels (`quest ops store-upload`, `quest ops store`, `quest ci`)
+
+QuestForge provides full parity with Meta's official Horizon Store release pipeline (`ovr-platform-util` v211.0.0).
+
+#### Credentials Pre-Configuration
+* **Meta App Secret (`QUEST_META_APP_SECRET`):** By default, `quest ops store-upload`, `quest ops store`, and the MCP `upload_store` / `ovr_store` tools automatically resolve the secret from the `$env:QUEST_META_APP_SECRET` environment variable (pre-configured in the environment).
+* **Meta App ID (`--app-id`):** The numeric Application ID registered on the [Meta Horizon Developer Dashboard](https://developers.meta.com/horizon/manage/).
+
+#### Method A: Direct Store Upload (`quest ops store-upload`)
+The fastest command to upload a signed, verified APK directly to a Meta Horizon Store release channel (`ALPHA`, `BETA`, `RC`, `PRODUCTION`):
+
+##### Windows (PowerShell)
+```pwsh
+# Upload directly (QUEST_META_APP_SECRET is auto-resolved from the environment)
+quest ops store-upload --app-id <APP_ID> --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"
+```
+
+##### Linux & WSL (Bash)
+```bash
+quest ops store-upload --app-id <APP_ID> --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk --channel ALPHA --notes "Release 1.0.0"
+```
+
+#### Method B: Automated CI Pipeline Build & Store Release (`quest ci`)
+Build, package ARM64 native binaries, generate CycloneDX SBOM, verify compliance scorecards, and upload to Meta in one automated CI step:
+```pwsh
+quest ci --project-dir examples/orbit-pulse-vr --release-version 1.0.0 --upload-channel ALPHA --app-id <APP_ID>
+```
+
+#### Method C: 1:1 `ovr-platform-util` Command Operations (`quest ops store`)
+Execute any granular 1:1 store operation (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`):
+```pwsh
+# Inspect tool version
+quest ops store --action version
+
+# Upload build
+quest ops store --action upload-quest-build --app-id <APP_ID> --apk examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk --channel ALPHA
+
+# Promote build to production release channel
+quest ops store --action set-release-channel-build --app-id <APP_ID> --channel PRODUCTION --build-id <BUILD_ID>
+
+# Download release build for auditing
+quest ops store --action download-quest-build --app-id <APP_ID> --build-id <BUILD_ID> --dir ./downloads
+```
+
+#### Method D: Autonomous AI XR Agent Upload (`quest agent`)
+Authenticate or run a role-based autonomous agent (`qa`, `developer`, `platform`, `enterprise`) over live MCP stdio:
 ```bash
 quest auth --status
-quest auth --provider gemini
-```
-Run a role-based AI XR agent (`studio`, `enterprise`, `platform`, `qa`, `developer`) over 14 MCP tools:
-```bash
 quest agent --role qa --provider gemini --auth --prompt "Verify examples/orbit-pulse-vr/dist/orbit-pulse-vr-1.0.0.apk and upload to ALPHA for app_id <APP_ID>"
 ```
-Or run any 1:1 `ovr-platform-util` Store operation directly (`upload-quest-build`, `download-quest-build`, `get-release-channel-data`, `set-release-channel-build`, `download-asset-file`, `version`):
 
-#### Windows (PowerShell)
-```pwsh
-$env:QUEST_META_APP_SECRET = "<your-meta-app-secret>"
-quest ops store --action version
-quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
-```
-
-#### Linux & WSL (Bash)
+#### Linux & WSL Subsystem Interop Details
 Meta does not publish a native Linux `ovr-platform-util` binary. When running the Linux `quest` binary inside **WSL (Windows Subsystem for Linux)**:
 - **Auto-detection:** `quest` detects WSL automatically via `WSL_DISTRO_NAME`, `WSL_INTEROP`, or `/proc/version`.
 - **Toolchain setup:** `quest setup --ovr-version latest` installs native Linux `adb` and `cmdline-tools`, and provisions Meta's Windows `ovr-platform-util.exe` with executable permissions (`0755`) for WSL interop.
-- **Zero-config Horizon Store uploads:** `quest ops store` and the MCP `ovr_store` tool automatically check both `~/.questforge/` and the Windows host cache (`/mnt/c/Users/*/.questforge/`), and translate Linux `--apk` / `--dir` paths with `wslpath -w` before invoking `ovr-platform-util.exe`:
-```bash
-export QUEST_META_APP_SECRET="<your-meta-app-secret>"
-quest ops store --action version
-quest ops store --action upload-quest-build --app-id <APP_ID> --apk dist/app.apk --channel ALPHA
-```
+- **Zero-config Horizon Store uploads:** `quest ops store-upload`, `quest ops store`, and the MCP `ovr_store` tool automatically check both `~/.questforge/` and the Windows host cache (`/mnt/c/Users/*/.questforge/`), and translate Linux `--apk` / `--dir` paths with `wslpath -w` before invoking `ovr-platform-util.exe`.
 - **USB Quest Headsets on WSL2:** Connect headsets over wireless ADB (`adb connect <ip>:5555`) or attach USB via `usbipd-win` (`usbipd attach --wsl --busid <busid>`).
 
 ---
