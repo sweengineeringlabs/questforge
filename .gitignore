@@ -20,6 +20,8 @@ Thumbs.db
 # Local work & logs
 .work/
 *.log
+*.keystore
+*.idsig
 
 # Frontend dependencies & build
 node_modules/
